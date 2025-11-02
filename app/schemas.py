@@ -103,7 +103,8 @@ class UserProfile(BaseModel):
 
 class ResetPassword(BaseModel):
     otp:str
-    new_password:str  # New pass, like "strong123
+    old_password:str
+    new_password:str
 
 class UserProfileDisplay(BaseModel):
     @staticmethod

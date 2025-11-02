@@ -22,11 +22,14 @@ def verifyOtp(db:Session,otp:str,currentUser:models.User):
     # Check if OTP good
     if otp_service.checkOtp(db,currentUser.email,otp):
         return
-    raise HTTPException(status_code=400, detail="Wrong or expired OTP")
+    raise HTTPException(status_code=400,detail="Wrong or expired OTP")
 
 @router.post("/reset-password")
 def reset_password(request:schemas.ResetPassword=Body(...),db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    # first, check if it is a valid otp before letting user change password
+    # first check whether the user entered the correct current password
+    if not utils.verifyPassword(request.old_password,currentUser.password):
+        raise HTTPException(status_code=403,detail="your old password is incorrect")
+    # then, check if it is a valid otp before letting user change password
     verifyOtp(db,request.otp,currentUser)
     # Hash new password (using methods in utils.py)
     currentUser.password = utils.hashPassword(request.new_password)
