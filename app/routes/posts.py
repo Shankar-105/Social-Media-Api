@@ -76,7 +76,10 @@ def create_post(
 def deletePost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     postToDelete=db.query(models.Post).filter(and_(models.Post.id==postId,models.Post.user_id==currentUser.id)).first()
     if not postToDelete:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with Id {postId} not Found") 
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with Id {postId} not Found")
+    if postToDelete.media_path and os.path.exists(media_path):
+        media_path=f"{MEDIA_FOLDER}/{postToDelete.media_path}"
+        os.remove(media_path)
     db.delete(postToDelete)
     db.commit()
     return postToDelete

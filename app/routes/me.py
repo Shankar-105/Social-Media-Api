@@ -57,11 +57,11 @@ def removeProfilePicture(db:Session=Depends(db.getDb),currentUser:models.User=De
     return {"message":"removed profile pic"}
 
 # retrives all posts using sqlAlchemy
-@router.get("/me/posts",response_model=List[sch.PostResponse])  
+@router.get("/me/posts")  
 def getAllPosts(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
    # allPosts=db.query(models.Post).filter(models.Post.user_id==currentUser.id).all()
    # simple way of querying 
-   # Thanks to the relationship() method 
+   # Thanks to the relationship() method
     allPosts=currentUser.posts
     return allPosts
 # a patch endpoint so that user can update what he wants to unlike put
