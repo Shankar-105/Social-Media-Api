@@ -17,12 +17,12 @@ class ConnectionManager:
             del self.active_connections[user_id]
             print(f"User {user_id} disconnected")
 
-    async def send_personal_message(self, message: dict, user_id: int):
+    async def send_personal_message(self, message:dict,user_id: int):
         if user_id in self.active_connections:
             await self.active_connections[user_id].send_text(json.dumps(message))
 
-    async def broadcast(self, message: dict):
-        for connection in self.active_connections.values():
-            await connection.send_text(json.dumps(message))
-
+    async def send_to_user(self, message: str, receiver_id: int):
+    # Send plain text to receiver
+     if receiver_id in self.active_connections:
+        await self.active_connections[receiver_id].send_text(message)
 manager = ConnectionManager()
