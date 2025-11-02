@@ -1,4 +1,4 @@
-from fastapi import Body,HTTPException,status,APIRouter,Depends
+from fastapi import Body,HTTPException,status,APIRouter,Depends,Query
 from sqlalchemy.orm import Session
 from app import oauth2,models,db,schemas as sch
 from sqlalchemy import and_
@@ -41,3 +41,23 @@ def editComment(comment_id:int,editInfo:sch.EditCommentModel=Body(...),db:Sessio
     db.commit()
     db.refresh(commentToBeEdited)
     return {"message":f"successfully edited comment {comment_id} of user {currentUser.username}"}
+
+@router.get("/comments-on/{post_id}")  
+def getAllPosts(post_id:int,limit:int=Query(10, ge=1, le=100),
+    offset: int = Query(0,ge=0),
+    db:Session=Depends(db.getDb),
+    currentUser:models.User=Depends(oauth2.getCurrentUser)
+    ):
+    # calculate the total number of posts of the currentuser
+    total=db.query(models.Comments).filter(models.Comments.post_id==post_id).count()
+    # only fetch the first 'limit' posts after skipping the first 'offset' posts
+    # and order them by the latest as first
+    paginatedComments=db.query(models.Comments).filter(models.Comments.post_id==post_id).offset(offset).limit(limit).all()
+    commentsResponse= [sch.CommentsResponse.displayComments(comments) for comments in paginatedComments]
+    return {
+        "comments":commentsResponse,
+        "total":total,
+        # a extra utility offered to forntend letting it know whether 
+        # still the user has posts or not
+        "has_more":(limit+offset)<total
+    }

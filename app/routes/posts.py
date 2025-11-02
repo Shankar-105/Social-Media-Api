@@ -12,7 +12,7 @@ router=APIRouter(
 )
 
 # gets a specific post with id -> {postId}
-@router.get("/posts/getPost/{postId}",response_model=sch.PostResponse)
+@router.get("/posts/getPost/{postId}")
 def getPost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     reqPost=db.query(models.Post).filter(and_(models.Post.id==postId,models.Post.user_id==currentUser.id)).first()
     if reqPost==None:
@@ -24,12 +24,12 @@ def getPost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depends
     # If no prior view, record the view and increment the count
     if not isViewed:
         # If no prior view, record the view and increment the count
-        new_view = models.PostView(post_id=postId, user_id=currentUser.id)
+        new_view = models.PostView(post_id=postId,user_id=currentUser.id)
         db.add(new_view)
-        reqPost.views += 1
+        reqPost.views+=1
         db.commit()
         db.refresh(reqPost)  # Refresh to get updated post data
-    return reqPost
+    return sch.PostResponse.displayUsersPosts(reqPost)
 
 
 # creates a new post using sqlAlchemy

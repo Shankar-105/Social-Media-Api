@@ -111,3 +111,14 @@ class UserProfileDisplay(BaseModel):
         return {
             "profile_pic":f"{config.settings.base_url}/profilepics/{user.profile_picture}"
         }
+    
+class CommentsResponse(BaseModel):
+    @staticmethod
+    def displayComments(comments:models.Comments):
+        return {
+            "comment":comments.comment_content,
+            "likes":comments.likes,
+            "created_at":comments.created_at,
+            "created_by":comments.user.username,
+            "user_id":comments.user.id
+        }
