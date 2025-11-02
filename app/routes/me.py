@@ -1,4 +1,4 @@
-from fastapi import status,HTTPException,Depends,Body,APIRouter,Form
+from fastapi import status,HTTPException,Depends,Body,APIRouter,Form,Query
 from fastapi.responses import FileResponse
 import app.schemas as sch
 from typing import List
@@ -58,12 +58,24 @@ def removeProfilePicture(db:Session=Depends(db.getDb),currentUser:models.User=De
 
 # retrives all posts using sqlAlchemy
 @router.get("/me/posts")  
-def getAllPosts(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-   # allPosts=db.query(models.Post).filter(models.Post.user_id==currentUser.id).all()
-   # simple way of querying 
-   # Thanks to the relationship() method
-    allPosts=currentUser.posts
-    return [sch.PostResponse.displayUsersPosts(post) for post in allPosts]
+def getAllPosts(limit:int=Query(10, ge=1, le=100),
+    offset: int = Query(0,ge=0),
+    db:Session=Depends(db.getDb),
+    currentUser:models.User=Depends(oauth2.getCurrentUser)
+    ):
+    # calculate the total number of posts of the currentuser
+    total=db.query(models.Post).filter(models.Post.user_id==currentUser.id).count()
+    # only fetch the first 'limit' posts after skipping the first 'offset' posts
+    # and order them by the latest as first
+    paginatedPosts=db.query(models.Post).filter(models.Post.user_id==currentUser.id).order_by(models.Post.created_at.desc()).offset(offset).limit(limit).all()
+    postresponse= [sch.PostResponse.displayUsersPosts(post) for post in paginatedPosts]
+    return {
+        "posts":postresponse,
+        "total":total,
+        # a extra utility offered to forntend letting it know whether 
+        # still the user has posts or not
+        "has_more":(limit+offset)<total
+    }
 # a patch endpoint so that user can update what he wants to unlike put
 # profile picture cannot be taken as a json data so it must be passed via Form
 # and the username and bio can be passed via Body params but its resulting in an
