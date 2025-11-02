@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app import models,config
 from app.db import engine
-from app.routes import changepassword, posts,users,auth,like,connect,comment,search,me
+from app.routes import changepassword, posts,users,auth,like,connect,comment,search,me,feed
 from fastapi.middleware.cors import CORSMiddleware
 models.Base.metadata.create_all(bind=engine)
 
@@ -37,3 +37,5 @@ app.include_router(comment.router)
 app.include_router(search.router)
 app.include_router(me.router)
 app.include_router(changepassword.router)
+app.include_router(me.router)
+app.include_router(feed.router)

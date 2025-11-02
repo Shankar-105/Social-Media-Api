@@ -10,8 +10,8 @@ from sqlalchemy.sql import func
 # structure or model of the db tables
 connections = Table(
     'connections', Base.metadata,
-    Column('followed_id', Integer,ForeignKey('users.id'),primary_key=True),
-    Column('follower_id', Integer,ForeignKey('users.id'),primary_key=True)
+    Column('followed_id',Integer,ForeignKey('users.id',ondelete="CASCADE"),primary_key=True),
+    Column('follower_id',Integer,ForeignKey('users.id',ondelete="CASCADE"),primary_key=True)
 )
 class OTP(Base):
     __tablename__ = "otps"
@@ -57,8 +57,8 @@ class Post(Base):
     hashtags=Column(String,nullable=True)
 class PostView(Base):
     __tablename__ = "post_views"
-    post_id = Column(Integer, ForeignKey("posts.id"),primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"),primary_key=True)
+    post_id = Column(Integer, ForeignKey("posts.id",ondelete="CASCADE"),primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id",ondelete="CASCADE"),primary_key=True)
     viewed_at = Column(DateTime,default=datetime.utcnow)
 class User(Base):
       __tablename__='users'

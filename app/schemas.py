@@ -1,7 +1,7 @@
 from pydantic import BaseModel,ConfigDict,Field
 from datetime import datetime
 from app import models,config
-from typing import Optional
+from typing import Optional,List
 from fastapi import Query
 # while the user is creating a post user shouldn't send any unncessary
 # data other than the below mentioned fields when user does this
@@ -122,3 +122,18 @@ class CommentsResponse(BaseModel):
             "created_by":comments.user.username,
             "user_id":comments.user.id
         }
+    
+class UserOut(BaseModel):  # Basic user info for post author
+    id: int
+    username: str
+    profile_pic:Optional[str]
+
+class FeedPost(BaseModel):
+    post_id:int
+    owner:UserOut
+    class Config:
+        from_attributes = True  # For ORM
+
+class FeedResponse(BaseModel):
+    feed:List[FeedPost]
+    total:int  # For pagination

@@ -6,8 +6,6 @@ router=APIRouter(tags=['search'])
 
 @router.get("/search",status_code=status.HTTP_202_ACCEPTED)
 def search(request:Request,searchParams:Annotated[sch.SearchFeature,Query()],db:Session=Depends(db.getDb),currenUser:models.User=Depends(oauth2.getCurrentUser)):
-    print(request.query_params)
-    print(searchParams.dict())
     if searchParams.q and searchParams.q.startswith("#"):
         hashtag = searchParams.q.lstrip("#")
         queryResult=db.query(models.Post).filter(models.Post.hashtags.ilike(f"%{hashtag}%"))

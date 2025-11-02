@@ -71,7 +71,7 @@ def create_post(
     db.refresh(new_post)
     return {"message": "Post created!", "post": new_post}
 # delets a specific post with the mentioned id -> {id}
-@router.delete("/posts/deletePost/{postId}",response_model=sch.PostResponse)
+@router.delete("/posts/deletePost/{postId}")
 def deletePost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     postToDelete=db.query(models.Post).filter(and_(models.Post.id==postId,models.Post.user_id==currentUser.id)).first()
     if not postToDelete:
@@ -81,7 +81,7 @@ def deletePost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depe
         os.remove(media_path)
     db.delete(postToDelete)
     db.commit()
-    return postToDelete
+    return {"message":f"post {postToDelete.id} deleted"}
 
 # update a specific post with id -> {id}
 @router.put("/posts/editPost/{postId}")
