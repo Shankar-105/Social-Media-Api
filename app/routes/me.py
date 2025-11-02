@@ -63,7 +63,7 @@ def getAllPosts(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oau
    # simple way of querying 
    # Thanks to the relationship() method
     allPosts=currentUser.posts
-    return allPosts
+    return [sch.PostResponse.displayUsersPosts(post) for post in allPosts]
 # a patch endpoint so that user can update what he wants to unlike put
 # profile picture cannot be taken as a json data so it must be passed via Form
 # and the username and bio can be passed via Body params but its resulting in an

@@ -20,14 +20,13 @@ class PostEssentials(BaseModel):
 # rather only data to be seen is shown so the below schema is a 
 # pydantic model while returning post data to user
 class PostResponse(BaseModel):
-    id:int
-    title:str
-    created_at:datetime
-    user_id:int
-    model_config = ConfigDict(
-        from_attributes=True
-    )
-
+    @staticmethod
+    def displayUsersPosts(post:models.Post):
+        return {
+            "post_media":f"{config.settings.base_url}/{config.settings.media_folder}/{post.media_path}",
+            "likes":post.likes,
+            "comments":post.comments_cnt
+        }
 # user shouldn't send any unncessary data so we need
 # to validate it through a model like below
 # if user sends any other data while signUp other than

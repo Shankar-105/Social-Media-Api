@@ -1,7 +1,7 @@
 # main.py
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from app import models
+from app import models,config
 from app.db import engine
 from app.routes import changepassword, posts,users,auth,like,connect,comment,search,me
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +17,7 @@ app = FastAPI()
 # without mount the uvicorn server running at http://127.0.0.1:8000 
 # wouldn"t be able to render that image and give a 404 error
 app.mount("/profilepics",StaticFiles(directory="profilepics"),name="profilepics")
+app.mount(f"/{config.settings.media_folder}",StaticFiles(directory=f"{config.settings.media_folder}"),name=f"{config.settings.media_folder}")
 # when the domain or the port changes
 # browser blocks the api-url(cross origin requests COR's)
 # so we need to do specify to allow all origins for now in dev scenario

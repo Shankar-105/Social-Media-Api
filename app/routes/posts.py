@@ -6,11 +6,10 @@ from app.db import getDb
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 import os,uuid,shutil
+from app.config import settings
 router=APIRouter(
     tags=['Posts']
 )
-
-MEDIA_FOLDER="posts_media"
 
 # gets a specific post with id -> {postId}
 @router.get("/posts/getPost/{postId}",response_model=sch.PostResponse)
@@ -53,7 +52,7 @@ def create_post(
         # using uuid Universally unique ID which generates a 36 characters
         ext=media.filename.split(".")[-1]
         filename=f"{uuid.uuid4()}.{ext}"
-        file_path=os.path.join(MEDIA_FOLDER,filename)
+        file_path=os.path.join(settings.media_folder,filename)
         # transfer the data from args to the file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(media.file, buffer)
@@ -78,7 +77,7 @@ def deletePost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depe
     if not postToDelete:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with Id {postId} not Found")
     if postToDelete.media_path and os.path.exists(media_path):
-        media_path=f"{MEDIA_FOLDER}/{postToDelete.media_path}"
+        media_path=f"{settings.media_folder}/{postToDelete.media_path}"
         os.remove(media_path)
     db.delete(postToDelete)
     db.commit()

@@ -80,4 +80,4 @@ def getAllPosts(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User
    # Thanks to the relationship() method 
     user=db.query(models.User).filter(models.User.id==user_id).first()
     allPosts=user.posts
-    return allPosts
+    return [sch.PostResponse.displayUsersPosts(post) for post in allPosts]

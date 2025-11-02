@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     email_server: str
     # base url
     base_url:str
+    # posts media folder
+    media_folder:str
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
