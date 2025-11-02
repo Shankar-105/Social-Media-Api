@@ -135,6 +135,17 @@ class FeedPost(BaseModel):
     class Config:
         from_attributes = True  # For ORM
 
+class MessageResponse(BaseModel):
+    id: int
+    content: str
+    sender_id: int
+    receiver_id: int
+    created_at: datetime
+    is_read: bool
+
+    class Config:
+        from_attributes = True
+        
 class FeedResponse(BaseModel):
     feed:List[FeedPost]
     total:int  # For pagination
