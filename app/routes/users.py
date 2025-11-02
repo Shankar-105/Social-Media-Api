@@ -3,7 +3,7 @@ from typing import List
 import app.schemas as sch
 from app import models,db,oauth2
 from sqlalchemy.orm import Session
-import app.utils.utils as utils
+import app.my_utils.utils as utils
 import os
 router=APIRouter(
     tags=['Users']

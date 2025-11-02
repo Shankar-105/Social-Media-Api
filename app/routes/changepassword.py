@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException,Body
 from sqlalchemy.orm import Session 
 from app import email_service,models,otp_service,schemas,db,oauth2
-from app.utils import utils
+from app.my_utils import utils
 
 router = APIRouter(tags=["changepassword"])
 
