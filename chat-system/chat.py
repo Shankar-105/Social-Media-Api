@@ -1,12 +1,12 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
-from app.my_utils.websocket import manager
+from app.my_utils.socket_manager import manager
 import json
 from datetime import datetime
-router = APIRouter(prefix="/chat",tags=["chat"])
+router = APIRouter(tags=["chat"])
 
-@router.websocket("/ws/{user_id}")
+@router.websocket("/chat/ws/{user_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
     user_id: int,
