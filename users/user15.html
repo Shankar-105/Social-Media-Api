@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Chat - User 14</title>
+    <title>Chat - User 15</title>
     <style>
         body { font-family: Arial, sans-serif; background: #18191a; color: #e4e6eb; padding: 0; margin: 0; }
         .container { max-width: 600px; margin: 30px auto 0 auto; background: #242526; border-radius: 10px; box-shadow: 0 2px 8px #000; padding: 15px 15px 0 15px;}
@@ -19,7 +19,7 @@
 </head>
 <body>
 <div class="container">
-    <h3 style="margin-bottom:4px;">Chat as User 14</h3>
+    <h3 style="margin-bottom:4px;">Chat as User 15</h3>
     <div id="output"></div>
     <div class="input-group">
         <input type="text" id="message" placeholder="Type a message..." autocomplete="off" 
@@ -28,9 +28,10 @@
     </div>
 </div>
 <script>
-    const userId = 14;
-    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE0LCJ1c2VyTmFtZSI6Inlhc2giLCJleHBUaW1lIjoxNzYyMTAzNTkzfQ.EddX7B6jf2HFE44_J-tQsjOI4n5AGaOBEKf_1fEbW1M";
-    const ws = new WebSocket(`ws://127.0.0.1:8000/chat/ws/${userId}?token=${token}`);
+    const backendIP = window.location.hostname;
+    const userId = 15;
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE1LCJ1c2VyTmFtZSI6ImpheWFudGgiLCJleHBUaW1lIjoxNzYyMTUzMTA2fQ.mZmsx2p53kIahYJKxAipqgGAwYuIRlQ9NeWKE5zpOMs";
+    const ws = new WebSocket(`ws://${backendIP}:8000/chat/ws/${userId}?token=${token}`);
     const output = document.getElementById('output');
 
     ws.onopen = () => addSysMsg("Connected!");
@@ -46,7 +47,7 @@
                 msg.sender_id === userId &&
                 msg.content
             ) {
-                // Ignore confirmation - we already show sent messages right away!
+                // Ignore confirmation - we already show sent messages immediately!
                 return;
             }
         } catch {
@@ -64,9 +65,8 @@
         const input = document.getElementById('message');
         const text = input.value.trim();
         if (!text || ws.readyState !== 1) return;
-        // Show own sent message IMMEDIATELY (optimistic, like real chat)
         addMsg(text, 'sent');
-        ws.send(JSON.stringify({to: 15, content: text}));
+        ws.send(JSON.stringify({to: 14, content: text}));
         input.value = '';
     }
 

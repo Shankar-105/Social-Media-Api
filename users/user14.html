@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Chat - User 15</title>
+    <title>Chat - User 14</title>
     <style>
         body { font-family: Arial, sans-serif; background: #18191a; color: #e4e6eb; padding: 0; margin: 0; }
         .container { max-width: 600px; margin: 30px auto 0 auto; background: #242526; border-radius: 10px; box-shadow: 0 2px 8px #000; padding: 15px 15px 0 15px;}
@@ -19,7 +19,7 @@
 </head>
 <body>
 <div class="container">
-    <h3 style="margin-bottom:4px;">Chat as User 15</h3>
+    <h3 style="margin-bottom:4px;">Chat as User 14</h3>
     <div id="output"></div>
     <div class="input-group">
         <input type="text" id="message" placeholder="Type a message..." autocomplete="off" 
@@ -28,29 +28,53 @@
     </div>
 </div>
 <script>
-    const userId = 15;
-    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE1LCJ1c2VyTmFtZSI6ImpheWFudGgiLCJleHBUaW1lIjoxNzYyMTUzMTA2fQ.mZmsx2p53kIahYJKxAipqgGAwYuIRlQ9NeWKE5zpOMs";
-    const ws = new WebSocket(`ws://127.0.0.1:8000/chat/ws/${userId}?token=${token}`);
+    const backendIP = window.location.hostname;
+    const userId = 14;
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE0LCJ1c2VyTmFtZSI6Inlhc2giLCJleHBUaW1lIjoxNzYyMTAzNTkzfQ.EddX7B6jf2HFE44_J-tQsjOI4n5AGaOBEKf_1fEbW1M";
+    // whenever user opens the app this url in the args of 'new WebSocket' is called
+    // and a WebSocket obj is created if the token authincation is successfull
+    // and now this opens the live tunnel between the sender and the server
+    const ws = new WebSocket(`ws://${backendIP}:8000/chat/ws/${userId}?token=${token}`);
     const output = document.getElementById('output');
-
+    // .onopen() is the method which is hit when ever the connection is succesfull
     ws.onopen = () => addSysMsg("Connected!");
+    // .onclose() if the user closes the tab or the server crashes
     ws.onclose = () => addSysMsg("Disconnected!");
+    // if any connection errors
     ws.onerror = e => addSysMsg("WebSocket Error!");
+    // this .onmessage() is called whenever the server responds
+    // suppose user14 sends a message to user15
+    // case-1
+    // then the user15's .onmessage() will ge called and 
+    // displays the text it recives from the server
+    // that is our backend routes(send_to_user)
+    // case-2 
+    // then user14 will also recive a pesonal message of what he sent
+    // then his user14's .onmessage() is called and gets from the server
+    // what he sent which we neatly display via frontend
 
+    // this e is the message from the server
     ws.onmessage = e => {
         try {
-            // JSON: Own sent message confirmation from server
+            // server may reply with json or string
+            // we parse it to a json object which the frontend uses to disply us
             const msg = JSON.parse(e.data);
             if (
+                // if the sender_id == userId which means its the message to the same user14
+                // here we ignore it for development we just display the message as sent soon after
+                // sender sends the message so we ignore it here
                 typeof msg === 'object' &&
                 msg.sender_id === userId &&
                 msg.content
             ) {
-                // Ignore confirmation - we already show sent messages immediately!
+                // Ignore confirmation - we already show sent messages right away!
                 return;
             }
+            // or else if its a string it will not have those attributes like sender_id,content
+            // as its a raw stirng so its an error object msg has no such attributes
+            // and the catch block catches it which means its a message from some one else 
         } catch {
-            // Not JSON: plain message from other user
+            // so jsut display it 
             if (e.data.startsWith('User')) {
                 let match = e.data.match(/^User (\d+): (.+)$/);
                 if (match && parseInt(match[1]) !== userId) {
@@ -59,13 +83,19 @@
             }
         }
     };
-
+    // whenever the user hits the send button 
     function sendMessage() {
         const input = document.getElementById('message');
         const text = input.value.trim();
         if (!text || ws.readyState !== 1) return;
-        addMsg(text, 'sent');
-        ws.send(JSON.stringify({to: 14, content: text}));
+        // Show sent message IMMEDIATELY (optimistic, like real chat)
+        addMsg(text,'sent');
+        // .send() sends the string in the msg entered in the type message box
+        // it converts it to a string and sends it whihc is very vital anyhwere
+        // always frontend sends the data in the form of json to backend
+        // and now the aawaiting 'await websocket.receive_text()' recives this
+        // and does the rest of the process
+        ws.send(JSON.stringify({to: 15, content: text}));
         input.value = '';
     }
 
