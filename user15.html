@@ -3,167 +3,90 @@
 <head>
     <title>Chat - User 15</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            padding: 20px;
-        }
-        h1 {
-            color: #333;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
-        }
-        #output {
-            height: 400px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 20px 0;
-            overflow-y: auto;
-            background: #fff;
-        }
-        .input-container {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        #message {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        button {
-            padding: 10px 20px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background 0.3s;
-        }
-        button:hover {
-            background: #45a049;
-        }
-        .msg {
-            margin: 8px 0;
-            padding: 10px;
-            border-radius: 10px;
-            max-width: 70%;
-            word-wrap: break-word;
-        }
-        .sent {
-            background: #dcf8c6;
-            margin-left: auto;
-            border-bottom-right-radius: 2px;
-        }
-        .received {
-            background: #e8e8e8;
-            margin-right: auto;
-            border-bottom-left-radius: 2px;
-        }
-        .system {
-            background: #fff3cd;
-            text-align: center;
-            margin: 10px auto;
-            padding: 5px 15px;
-            border-radius: 15px;
-            font-size: 0.9em;
-            color: #856404;
-        }
-        .timestamp {
-            font-size: 0.8em;
-            color: #666;
-            margin-top: 4px;
-        }
+        body { font-family: Arial, sans-serif; background: #18191a; color: #e4e6eb; padding: 0; margin: 0; }
+        .container { max-width: 600px; margin: 30px auto 0 auto; background: #242526; border-radius: 10px; box-shadow: 0 2px 8px #000; padding: 15px 15px 0 15px;}
+        #output { height: 440px; overflow-y: auto; display: flex; flex-direction: column; background: #18191a; border-radius: 8px; padding: 10px;}
+        .input-group { display: flex; margin-top: 10px; }
+        #message { flex: 1; padding: 10px; border-radius: 20px; border: none; font-size: 16px; background: #3a3b3c; color: white;}
+        button { margin-left: 10px; border: none; padding: 10px 26px; background: #0084ff; color: #fff; border-radius: 18px; font-weight: bold; cursor: pointer;}
+        .msg-row { display: flex; align-items: flex-end; margin-bottom: 6px;}
+        .sent { justify-content: flex-end; }
+        .received { justify-content: flex-start; }
+        .msg-bubble { max-width: 63%; padding: 9px 16px; border-radius: 17px; font-size: 16px;}
+        .sent .msg-bubble { background: #0084ff; color: #ffffff; border-bottom-right-radius: 4px;}
+        .received .msg-bubble { background: #3a3b3c; color: #e4e6eb; border-bottom-left-radius: 4px;}
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Chat as User <span id="myId">15</span></h1>
-        <div id="output"></div>
-        <div class="input-container">
-            <input type="text" id="message" placeholder="Type your message here..." 
-                   onkeypress="if(event.key === 'Enter') send()"/>
-            <button onclick="send()">Send</button>
-        </div>
+<div class="container">
+    <h3 style="margin-bottom:4px;">Chat as User 15</h3>
+    <div id="output"></div>
+    <div class="input-group">
+        <input type="text" id="message" placeholder="Type a message..." autocomplete="off" 
+            onkeypress="if(event.key==='Enter'){ sendMessage();}">
+        <button onclick="sendMessage()">Send</button>
     </div>
+</div>
+<script>
+    const userId = 15;
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE1LCJ1c2VyTmFtZSI6ImpheWFudGgiLCJleHBUaW1lIjoxNzYyMTUzMTA2fQ.mZmsx2p53kIahYJKxAipqgGAwYuIRlQ9NeWKE5zpOMs";
+    const ws = new WebSocket(`ws://127.0.0.1:8000/chat/ws/${userId}?token=${token}`);
+    const output = document.getElementById('output');
 
-    <script>
-        const userId = 15;
-        document.getElementById("myId").textContent = userId;
+    ws.onopen = () => addSysMsg("Connected!");
+    ws.onclose = () => addSysMsg("Disconnected!");
+    ws.onerror = e => addSysMsg("WebSocket Error!");
 
-        const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE1LCJ1c2VyTmFtZSI6ImpheWFudGgiLCJleHBUaW1lIjoxNzYyMTAzNjQ0fQ.Teckrs7umgYdKHnJsGm2U49HO8WyZ5bosOpWQ1uegZQ";
-        const ws = new WebSocket(`ws://127.0.0.1:8000/chat/ws/${userId}?token=${token}`);
-
-        ws.onopen = () => addMsg("Connected to chat server!", "system");
-        ws.onclose = () => addMsg("Disconnected from chat server", "system");
-
-        <!-- Previous code remains same until the ws.onmessage part -->
-    ws.onmessage = (e) => {
-        const data = e.data;
+    ws.onmessage = e => {
         try {
-            // Try to parse as JSON first
-            const msg = JSON.parse(data);
-            const isMine = msg.sender_id === userId;
-            const prefix = isMine ? "You" : `User ${msg.sender_id}`;
-            const time = new Date(msg.timestamp).toLocaleTimeString();
-            addMsg(`${prefix}: ${msg.content}`, isMine ? "sent" : "received", time);
+            // JSON: Own sent message confirmation from server
+            const msg = JSON.parse(e.data);
+            if (
+                typeof msg === 'object' &&
+                msg.sender_id === userId &&
+                msg.content
+            ) {
+                // Ignore confirmation - we already show sent messages immediately!
+                return;
+            }
         } catch {
-            // If it's a plain text message (from send_to_user)
-            if (data.startsWith('User')) {
-                // Extract user ID and message content
-                const match = data.match(/User (\d+): (.*)/);
-                if (match) {
-                    const [_, senderId, content] = match;
-                    addMsg(`User ${senderId}: ${content}`, "received");
-                } else {
-                    addMsg(data, "received");
+            // Not JSON: plain message from other user
+            if (e.data.startsWith('User')) {
+                let match = e.data.match(/^User (\d+): (.+)$/);
+                if (match && parseInt(match[1]) !== userId) {
+                    addMsg(match[2], 'received');
                 }
-            } else {
-                addMsg(data, "received");
             }
         }
     };
 
-    function send() {
-        const msgInput = document.getElementById("message");
-        const content = msgInput.value.trim();
-        if (!content) return;
-
-        // Default to sending to User 15
-        const msg = JSON.stringify({ to: 15, content: content });
-        ws.send(msg);
-        
-        // Don't add message here - wait for the server response
-        msgInput.value = "";
+    function sendMessage() {
+        const input = document.getElementById('message');
+        const text = input.value.trim();
+        if (!text || ws.readyState !== 1) return;
+        addMsg(text, 'sent');
+        ws.send(JSON.stringify({to: 14, content: text}));
+        input.value = '';
     }
 
-    function addMsg(text, type = "received", time = null) {
-        const div = document.createElement("div");
-        div.className = `msg ${type}`;
-        div.textContent = text;
-        
-        if (time) {
-            const timeDiv = document.createElement("div");
-            timeDiv.className = "timestamp";
-            timeDiv.textContent = time;
-            div.appendChild(timeDiv);
-        }
-
-        const output = document.getElementById("output");
-        output.appendChild(div);
+    function addMsg(text, cls) {
+        const row = document.createElement('div');
+        row.className = `msg-row ${cls}`;
+        const bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        bubble.textContent = text;
+        row.appendChild(bubble);
+        output.appendChild(row);
+        output.scrollTop = output.scrollHeight;
+    }
+    function addSysMsg(text) {
+        const row = document.createElement('div');
+        row.style.textAlign = "center";
+        row.style.fontSize = "13px";
+        row.style.color = "#bbb";
+        row.style.padding = "7px";
+        row.textContent = text;
+        output.appendChild(row);
         output.scrollTop = output.scrollHeight;
     }
 </script>
