@@ -1,7 +1,6 @@
 from app.db import Base ,getDb
 from fastapi import Depends
-from sqlalchemy.orm import Session
-from sqlalchemy import Column,Integer,String,Boolean,ForeignKey,Table,DateTime
+from sqlalchemy import Column,Integer,String,Boolean,ForeignKey,Table,DateTime,Index
 from sqlalchemy.sql.expression import null,text
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.orm import relationship

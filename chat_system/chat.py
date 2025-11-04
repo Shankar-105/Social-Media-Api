@@ -34,25 +34,11 @@ async def websocket_endpoint(
     # make a connection request by using the manager obj 
     await manager.connect(user_id,websocket)
     try:
-        # after connecting the user successfully
-        # enter him into the live chat the while True:
-        # which stays forever until any of ther three disconnect cases are hit
         while True:
-            # the sender may send data at any time
-            # so waiting for the data until he sends is ridiculous
-            # so we use await which allows the server to do other unfinished jobs
             data = await websocket.receive_text()
-            # if msg is sent by the sender well its time 
-            # to send the msg to the rexciver and store it in db 
-            # but wait you cannot directly send that msg from 
-            # the frontend or the sender because the sender's JS sends the data 
-            # in the form of JSON so as we need to store that messsage in db 
-            # and also send a string to the reciver there is a neeed to convert 
-            # that json data to a python dict son.loads() does that for us 
             message_data = json.loads(data)
             print("data successfully loaded")
-            # Save to DB
-            # store it in db so create a models.Message obj
+            # Save to DB (ALWAYS — even if offline)
             msg = models.Message(
                 content=message_data["content"],
                 sender_id=user_id,
@@ -62,28 +48,37 @@ async def websocket_endpoint(
             db.commit()
             db.refresh(msg)
             print("added to db")
-            # Send to receiver if online
-            # now send a string to reciver call the send_to_user method
-            await manager.send_to_user(f"User {user_id}: {msg.content}",msg.receiver_id)
-            print("entered into message sender method via send_to_user")
-            # collect the response data that is the sender data so that 
-            # we use this for future enhancements to let the sender know
-            # much more about the status of the msg that he sent
+            # Check if receiver is in active_connections
+            receiver_id = msg.receiver_id
+            if receiver_id in manager.active_connections:
+                try:
+                    # Try to send (if fails, it's a zombie)
+                    await manager.send_to_user(
+                        f"User {user_id}: {msg.content}", 
+                        receiver_id
+                    )
+                    print("Message sent via WebSocket")
+                except Exception as e:
+                    # Send failed → zombie socket → remove
+                    print(f"Send failed: {e}")
+                    manager.disconnect(receiver_id)
+                    # TODO: Later, send push notification here
+            else:
+                # Offline → don't send, just save in DB
+                print("Receiver offline — message saved in DB")
+                # TODO: Later, send push notification here
+            # Send response back to sender
             response_data = {
                 "id": msg.id,
                 "content": msg.content,
                 "sender_id": msg.sender_id,
                 "receiver_id": msg.receiver_id,
-                "timestamp": msg.created_at.isoformat()  # ← Convert datetime to string
+                "timestamp": msg.created_at.isoformat()
             }
-            # call the send_personal_message from websockets.py
-            await manager.send_personal_message(response_data,user_id)
-            print("entered into message sender method directly")
-    # this except block it hit when the user closes the tab
-    # or the server stops or crashes
+            await manager.send_personal_message(response_data, user_id)
+            print("Response sent to sender")
     except WebSocketDisconnect:
         manager.disconnect(user_id)
-    # this is hit if any exception in the code like any syntax or validation errors
     except Exception as e:
         print(e)
         manager.disconnect(user_id)
