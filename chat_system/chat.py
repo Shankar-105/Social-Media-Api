@@ -2,9 +2,11 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-import json
+import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
+
+ping_task=None
 
 @router.websocket("/chat/ws/{user_id}")
 async def websocket_endpoint(
@@ -33,11 +35,18 @@ async def websocket_endpoint(
     # well if the token has passed all the above tests
     # make a connection request by using the manager obj 
     await manager.connect(user_id,websocket)
+    global ping_task
+    if ping_task is None:
+        ping_task = asyncio.create_task(manager.periodic_ping())
+        print("Security guard started — pinging every 20 sec")
     try:
         while True:
             data = await websocket.receive_text()
             message_data = json.loads(data)
-            print("data successfully loaded")
+            if message_data.get("type") == "pong":
+                print("Pong received — user alive")
+                continue  # Skip to next message
+            
             # Save to DB (ALWAYS — even if offline)
             msg = models.Message(
                 content=message_data["content"],

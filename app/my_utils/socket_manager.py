@@ -1,6 +1,6 @@
 from fastapi import WebSocket
 from typing import List, Dict
-import json
+import json,asyncio
 # a connection manager class for managing any websocket request
 # from any user rather writing each for every guy
 class ConnectionManager:
@@ -40,6 +40,31 @@ class ConnectionManager:
     # Send plain text to receiver
      if receiver_id in self.active_connections:
         await self.active_connections[receiver_id].send_text(message)
+    async def send_ping(self, websocket: WebSocket):
+        try:
+            # Step 1: Send "ping"
+            await websocket.send_json({"type": "ping"})
+            # Step 2: Wait max 10 sec for "pong"
+            await asyncio.wait_for(websocket.receive_json(),timeout=10.0)
+            # If we reach here → pong received → GOOD
+            return True
+        except asyncio.TimeoutError:
+            # No pong in 10 sec → zombie
+            return False
+        except Exception:
+            # Network error → zombie
+            return False
+        
+    async def periodic_ping(self):
+        while True:
+            await asyncio.sleep(20)  # Wait 20 sec
+            user_ids = list(self.active_connections.keys())  # Copy to avoid error
+            for user_id in user_ids:
+                ws = self.active_connections.get(user_id)
+                if ws:
+                    if not await self.send_ping(ws):
+                        print(f"Zombie: User {user_id} → removing")
+                        self.disconnect(user_id)
 # the instance of the class which 
 # manages all users websocket requests
 manager = ConnectionManager()
