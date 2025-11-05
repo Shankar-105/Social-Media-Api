@@ -43,9 +43,9 @@ async def websocket_endpoint(
         while True:
             data = await websocket.receive_text()
             message_data = json.loads(data)
-            if message_data.get("type") == "pong":
+            '''if message_data.get("type") == "pong":
                 print("Pong received — user alive")
-                continue  # Skip to next message
+                continue  # Skip to next message'''
             
             # Save to DB (ALWAYS — even if offline)
             msg = models.Message(
