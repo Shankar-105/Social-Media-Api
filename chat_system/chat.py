@@ -35,10 +35,10 @@ async def websocket_endpoint(
     # well if the token has passed all the above tests
     # make a connection request by using the manager obj 
     await manager.connect(user_id,websocket)
-    global ping_task
+    '''global ping_task
     if ping_task is None:
         ping_task = asyncio.create_task(manager.periodic_ping())
-        print("Security guard started — pinging every 20 sec")
+        print("Security guard started — pinging every 20 sec") '''
     try:
         while True:
             data = await websocket.receive_text()
@@ -67,6 +67,9 @@ async def websocket_endpoint(
                         receiver_id
                     )
                     print("Message sent via WebSocket")
+                    msg.is_read = True
+                    db.commit()
+                    print(f"Message {msg.id} marked as READ")
                 except Exception as e:
                     # Send failed → zombie socket → remove
                     print(f"Send failed: {e}")
@@ -82,7 +85,8 @@ async def websocket_endpoint(
                 "content": msg.content,
                 "sender_id": msg.sender_id,
                 "receiver_id": msg.receiver_id,
-                "timestamp": msg.created_at.isoformat()
+                "timestamp": msg.created_at.isoformat(),
+                "is_read":msg.is_read
             }
             await manager.send_personal_message(response_data, user_id)
             print("Response sent to sender")
