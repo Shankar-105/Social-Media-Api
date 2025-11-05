@@ -39,6 +39,25 @@ async def websocket_endpoint(
     if ping_task is None:
         ping_task = asyncio.create_task(manager.periodic_ping())
         print("Security guard started — pinging every 20 sec") '''
+    
+    missed_messages = db.query(models.Message).filter(
+        models.Message.receiver_id == user_id,
+        models.Message.is_read == False
+    ).order_by(models.Message.created_at.asc()).all()
+
+    for msg in missed_messages:
+        message=f"User {msg.sender_id}: {msg.content}"
+        try:
+            await websocket.send_text(message)
+        except:
+            print("Connection lost during missed msg delivery")
+            break
+    if missed_messages:
+        db.query(models.Message).filter(
+            models.Message.receiver_id == user_id,
+            models.Message.is_read == False
+        ).update({"is_read":True},synchronize_session=False)
+        db.commit()
     try:
         while True:
             data = await websocket.receive_text()

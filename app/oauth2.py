@@ -34,7 +34,7 @@ def createAccessToken(data:dict):
     # return the token
     return jwtToken
 
-def verifyAccesstoken(token: str,credentials_exception,dbs:Session):
+def verifyAccesstoken(token:str,credentials_exception,dbs:Session):
     try:
         # decode's the token which returns a dict of the sent user info 
         # while creating a token (userId,userName) 
