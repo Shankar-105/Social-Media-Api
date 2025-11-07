@@ -1,82 +1,79 @@
+# socket_manager.py
 from fastapi import WebSocket
-from typing import List, Dict
-import json,asyncio
-# a connection manager class for managing any websocket request
-# from any user rather writing each for every guy
+from typing import Dict
+import json, asyncio
+from datetime import datetime
+
 class ConnectionManager:
     def __init__(self):
-        # creates a dictionary of type {int,WebSocket}
-        # to map a user to his given webSocket for live chat
-        # {user_id: websocket}
-        self.active_connections:Dict[int, WebSocket]={}
-    # this is the method in which we implement the connection logic of a websocket
+        # store dict per user: {user_id: {"ws": WebSocket, "pong_event": Event, "last_pong": datetime}}
+        self.active_connections: Dict[int, Dict] = {}
+
     async def connect(self, user_id: int, websocket: WebSocket):
-        # this is where the http request is upgraded to a websocket protocol
-        # it takes a 1 or 2 secs for the handshake process so the server shouldn't 
-        # freeze here rather it need to serve other requests too so we use the await here
         await websocket.accept()
-        # after the upgrade we put the current user into our active connections dict
-        self.active_connections[user_id] = websocket
-        # for debugging purposes
+        self.active_connections[user_id] = {
+            "ws": websocket,
+            "pong_event": asyncio.Event(),
+            "last_pong": datetime.utcnow()
+        }
         print(f"User {user_id} connected via WebSocket")
-    # whenever the user closes the tab or
-    # the server crashes or
-    # we manually disconnect the user only then this disconnect is hit
+
     def disconnect(self, user_id: int):
         if user_id in self.active_connections:
             del self.active_connections[user_id]
             print(f"User {user_id} disconnected")
-    # we use this method to send a json to the sender to 
-    # let him know that the message is sent without any errors
-    # and can be used further to add more features like typing,status etc
-    async def send_personal_message(self,message:dict,user_id: int):
-        if user_id in self.active_connections:
-            # json.dumps() in python converts back a dict to json 
-            await self.active_connections[user_id].send_text(json.dumps(message))
-    # we use this method to send the message from the sender to the reciver 
-    # we usually send a string here in development
-    # later we can send a json to the reciver id needed
+
+    async def send_personal_message(self, message: dict, user_id: int):
+        conn = self.active_connections.get(user_id)
+        if conn:
+            await conn["ws"].send_text(json.dumps(message))
+
     async def send_to_user(self, message: str, receiver_id: int):
-    # Send plain text to receiver
-     if receiver_id in self.active_connections:
-        await self.active_connections[receiver_id].send_text(message)
-    
-    # --------------------------------------------------------------------------------
-    
-    async def send_ping(self, websocket: WebSocket):
-     try:
-        await websocket.send_json({"type": "ping"})
-        print("Sent ping, waiting for pong...")
-        # Wait up to 10 sec for ANY message
-        data = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
-        print("Data:",data)
+        conn = self.active_connections.get(receiver_id)
+        if conn:
+            await conn["ws"].send_text(message)
+
+    def mark_pong(self, user_id: int):
+        """Called by main reader when a pong is received for user_id."""
+        conn = self.active_connections.get(user_id)
+        if conn:
+            # set event so send_ping can continue
+            conn["pong_event"].set()
+            conn["last_pong"] = datetime.utcnow()
+            # create a fresh event for next ping
+            conn["pong_event"] = asyncio.Event()
+            print(f"Marked pong for user {user_id}")
+
+    async def send_ping(self,user_id:int) -> bool:
+        """Send ping to the given user's websocket and wait for the corresponding event."""
+        conn = self.active_connections.get(user_id)
+        if not conn:
+            return False
+        ws = conn["ws"]
+        event = conn["pong_event"]
         try:
-              msg = json.loads(data)
-        except Exception:
-                print("Received non-JSON reply to ping:", repr(data))
-                return False
-        if msg.get("type") == "pong":
-                return True
-        else:
-                print("Received JSON but not pong:", msg)
-                return False
-     except asyncio.TimeoutError:
-        print("Timeout: No response")
-        return False
-     except Exception as e:
-        print(f"Error in ping: {e}")
-        return False
-        
+            # clear event (it was re-created after last pong)
+            # send ping
+            await ws.send_json({"type": "ping"})
+            # wait for main reader to set the event
+            await asyncio.wait_for(event.wait(), timeout=10.0)
+            return True
+        except asyncio.TimeoutError:
+            print(f"Timeout waiting for pong from user {user_id}")
+            return False
+        except Exception as e:
+            print(f"Error sending ping to user {user_id}: {e}")
+            return False
+
     async def periodic_ping(self):
         while True:
-            await asyncio.sleep(20)  # Wait 20 sec
-            user_ids = list(self.active_connections.keys())  # Copy to avoid error
+            await asyncio.sleep(20)
+            user_ids = list(self.active_connections.keys())
             for user_id in user_ids:
-                ws = self.active_connections.get(user_id)
-                if ws:
-                    if not await self.send_ping(ws):
-                        print(f"Zombie: User {user_id} → removing")
-                        self.disconnect(user_id)
-# the instance of the class which 
-# manages all users websocket requests
+                ok = await self.send_ping(user_id)
+                if not ok:
+                    print(f"Zombie: User {user_id} → removing")
+                    self.disconnect(user_id)
+
+# single manager instance
 manager = ConnectionManager()

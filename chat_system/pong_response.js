@@ -1,29 +1,30 @@
-// Simple pong responder for FastAPI WS ping/pong
-// Listens for incoming 'ping' from the server and auto-replies with a 'pong'
+// pong_response.js
+// wscat script: listens for JSON {"type":"ping"} and replies {"type":"pong"}
 
-const test = require('node:test');
-const WebSocket = require('ws');
+module.exports.setup = function (ws) {
+  console.log('pong_response script loaded — ready for pings');
 
-// This runs when message arrives
-function onMessage(ws,data) {
-    console.log('Received:', data);  // Log what server sends
+  ws.on('message', (data) => {
+    // ensure we have a string
+    const text = (typeof data === 'string') ? data : data.toString();
+    console.log('Received raw:', text);
+
     try {
-        const text = data.toString();
-        const msg = JSON.parse(text);  // Assume JSON
-        // check if its a ping or not
-        if (msg.type === 'ping') {
-            // if its a ping then send a pong reply from the client
-            const pongReply = JSON.stringify({ type: 'pong' });
-            ws.send(pongReply);  // Send back over WS
-            console.log('Sent pong!');
-        }
-    } catch (e) {
-        console.log('Non-JSON or ignore:', data);
+      const msg = JSON.parse(text);
+      if (msg && msg.type === 'ping') {
+        // reply with a JSON pong
+        ws.send(JSON.stringify({ type:'pong' }));
+        console.log('Sent pong!');
+      } else {
+        // Not a ping — you can log or ignore
+        console.log('Not a ping (ignored):', msg);
+      }
+    } catch (err) {
+      // Not JSON — ignore or log plain text
+      console.log('Non-JSON message (ignored):', text);
     }
-}
-// wscat calls this setup function when it recives msg from the server
-module.exports.setup = function(ws) {
-    // bind the handler so ws is available as first param
-    ws.on('message', (data) => onMessage(ws,data));
-    console.log('Script loaded: Ready for pings!');
+  });
+
+  ws.on('close', () => console.log('Client socket closed'));
+  ws.on('error', (err) => console.error('Client socket error:', err));
 };

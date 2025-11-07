@@ -61,15 +61,19 @@ async def websocket_endpoint(
     try:
         while True:
             data = await websocket.receive_text()
-            message_data = json.loads(data)
             try:
-                if message_data.get("type") == "pong":
-                   print("Pong received — user alive")
-                   continue  # Skip to next message
+               message_data = json.loads(data)
             except json.JSONDecodeError:
         # Not a JSON message (could be plain chat text) — handle or ignore
-                   print("Received non-JSON chat payload; ignoring or handle as needed:", repr(data))
-                   continue            
+                  print("Received non-JSON chat payload; ignoring or handle as needed:", repr(data))
+                  continue
+
+    # If it's a pong, mark it and continue (don't treat as chat)
+            if message_data.get("type") == "pong":
+                print("Pong received — user alive")
+                manager.mark_pong(user_id)
+                continue
+            
             # Save to DB (ALWAYS — even if offline)
             msg = models.Message(
                 content=message_data["content"],

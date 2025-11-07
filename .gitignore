@@ -42,3 +42,8 @@ alembic.ini
 # ignore the profile pictures and post media
 profilepics/
 posts_media/
+
+# ignore the node_modules
+chat_system/node_modules
+chat_system/package-lock.json
+chat_system/package.json
