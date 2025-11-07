@@ -40,20 +40,32 @@ class ConnectionManager:
     # Send plain text to receiver
      if receiver_id in self.active_connections:
         await self.active_connections[receiver_id].send_text(message)
-    '''async def send_ping(self, websocket: WebSocket):
+    
+    # --------------------------------------------------------------------------------
+    
+    async def send_ping(self, websocket: WebSocket):
+     try:
+        await websocket.send_json({"type": "ping"})
+        print("Sent ping, waiting for pong...")
+        # Wait up to 10 sec for ANY message
+        data = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+        print("Data:",data)
         try:
-            # Step 1: Send "ping"
-            await websocket.send_json({"type": "ping"})
-            # Step 2: Wait max 10 sec for "pong"
-            await asyncio.wait_for(websocket.receive_json(),timeout=10.0)
-            # If we reach here → pong received → GOOD
-            return True
-        except asyncio.TimeoutError:
-            # No pong in 10 sec → zombie
-            return False
+              msg = json.loads(data)
         except Exception:
-            # Network error → zombie
-            return False
+                print("Received non-JSON reply to ping:", repr(data))
+                return False
+        if msg.get("type") == "pong":
+                return True
+        else:
+                print("Received JSON but not pong:", msg)
+                return False
+     except asyncio.TimeoutError:
+        print("Timeout: No response")
+        return False
+     except Exception as e:
+        print(f"Error in ping: {e}")
+        return False
         
     async def periodic_ping(self):
         while True:
@@ -64,7 +76,7 @@ class ConnectionManager:
                 if ws:
                     if not await self.send_ping(ws):
                         print(f"Zombie: User {user_id} → removing")
-                        self.disconnect(user_id)'''
+                        self.disconnect(user_id)
 # the instance of the class which 
 # manages all users websocket requests
 manager = ConnectionManager()

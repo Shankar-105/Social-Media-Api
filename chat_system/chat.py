@@ -35,10 +35,10 @@ async def websocket_endpoint(
     # well if the token has passed all the above tests
     # make a connection request by using the manager obj 
     await manager.connect(user_id,websocket)
-    '''global ping_task
+    global ping_task
     if ping_task is None:
         ping_task = asyncio.create_task(manager.periodic_ping())
-        print("Security guard started — pinging every 20 sec") '''
+        print("Security guard started — pinging every 20 sec")
     
     missed_messages = db.query(models.Message).filter(
         models.Message.receiver_id == user_id,
@@ -62,10 +62,14 @@ async def websocket_endpoint(
         while True:
             data = await websocket.receive_text()
             message_data = json.loads(data)
-            '''if message_data.get("type") == "pong":
-                print("Pong received — user alive")
-                continue  # Skip to next message'''
-            
+            try:
+                if message_data.get("type") == "pong":
+                   print("Pong received — user alive")
+                   continue  # Skip to next message
+            except json.JSONDecodeError:
+        # Not a JSON message (could be plain chat text) — handle or ignore
+                   print("Received non-JSON chat payload; ignoring or handle as needed:", repr(data))
+                   continue            
             # Save to DB (ALWAYS — even if offline)
             msg = models.Message(
                 content=message_data["content"],
