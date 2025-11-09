@@ -1,6 +1,5 @@
-from app.db import Base ,getDb
-from fastapi import Depends
-from sqlalchemy import Column,Integer,String,Boolean,ForeignKey,Table,DateTime,Index
+from app.db import Base
+from sqlalchemy import Column,Integer,String,Boolean,ForeignKey,Table,DateTime,UniqueConstraint
 from sqlalchemy.sql.expression import null,text
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.orm import relationship
@@ -28,6 +27,15 @@ class SharedPost(Base):
     from_user = relationship("User", foreign_keys=[from_user_id],back_populates="sent_posts")
     to_user = relationship("User", foreign_keys=[to_user_id],back_populates="received_posts")
 
+# models.py
+class DeletedMessage(Base):
+    __tablename__ = "deleted_messages"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    # Unique: one user can't delete same msg twice
+    __table_args__ = (UniqueConstraint('user_id', 'message_id',name='uq_user_deleted_msg'),)
+
 class OTP(Base):
     __tablename__ = "otps"
     id = Column(Integer, primary_key=True, index=True)
@@ -46,7 +54,7 @@ class CommentVotes(Base):
     comment_id=Column(Integer,ForeignKey("comments.id",ondelete="CASCADE"),primary_key=True,nullable=False)
     user_id=Column(Integer,ForeignKey("users.id",ondelete="CASCADE"),primary_key=True,nullable=False)
     like=Column(Boolean,nullable=False)
-    
+
 class Comments(Base):
     __tablename__='comments'
     id = Column(Integer,primary_key=True)

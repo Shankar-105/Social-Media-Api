@@ -9,7 +9,7 @@ router = APIRouter(tags=["chat"])
 ping_task=None
 
 @router.websocket("/chat/ws/{user_id}")
-async def websocket_endpoint(
+async def chat(
     websocket: WebSocket,
     user_id: int,
     token: str=Query(None,description="Search query params"),
