@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(tags=["chat_history"])
 
-@router.get("/history/{friend_id}",response_model=List[sch.ChatHistory])
+@router.get("/history/{friend_id}")
 def get_chat_history(
     friend_id: int,
     db: Session = Depends(getDb),
@@ -31,5 +31,47 @@ def get_chat_history(
             (models.Message.is_read == True)
         )
     ).order_by(models.Message.created_at.desc())
-    messages=messages[::-1]
-    return messages  # oldest first
+
+    shared_posts = db.query(models.SharedPost).filter(
+        (
+            # My messages show all whether he has seen them or not
+            (models.SharedPost.from_user_id == currentUser.id) &
+            (models.SharedPost.to_user_id == friend_id)
+        ) | (
+            # Friend's messages only show delivered msgs is_read -> True
+            (models.SharedPost.from_user_id == friend_id) &
+            (models.SharedPost.to_user_id == currentUser.id) &
+            (models.SharedPost.is_read == True)
+        )
+    ).order_by(models.SharedPost.created_at.desc())
+    chat_history=[]
+    for m in messages:
+        chat_history.append({
+            "type": "message",
+            "id": m.id,
+            "content": m.content,
+            "sender_id": m.sender_id,
+            "receiver_id":m.receiver_id,
+            "timestamp": m.created_at.isoformat(),
+            "is_read": m.is_read
+        })
+
+    for s in shared_posts:
+        chat_history.append({
+            "type": "shared_post",
+            "shared_id": s.id,
+            "post_id": s.post.id,
+             "sender_id": m.sender_id,
+            "receiver_id":m.receiver_id,
+            "title": (s.post.title or "")[:60],
+            "media_type": s.post.media_type,
+            "media_url": s.post.media_path,
+            "sender_nickname": s.from_user.nickname,
+            "message": s.message,
+            "sent_at": s.created_at.isoformat(),
+            "is_read": s.is_read
+        })
+    chat_history.sort(key=lambda x : x.get("timestamp") if "timestamp" in  x else x.get("sent_at"))
+    for x in chat_history:
+        print(x.get("timestamp") if "timestamp" in  x else x.get("sent_at"))
+    return chat_history  # oldest first

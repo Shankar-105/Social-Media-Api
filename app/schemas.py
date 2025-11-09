@@ -152,7 +152,6 @@ class ChatHistory(BaseModel):
     receiver_id: int
     created_at : datetime
     is_read: bool
-
     class Config:
         from_attributes = True  # Important for SQLAlchemy
 class FeedResponse(BaseModel):
