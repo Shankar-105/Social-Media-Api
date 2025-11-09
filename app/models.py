@@ -12,6 +12,22 @@ connections = Table(
     Column('followed_id',Integer,ForeignKey('users.id',ondelete="CASCADE"),primary_key=True),
     Column('follower_id',Integer,ForeignKey('users.id',ondelete="CASCADE"),primary_key=True)
 )
+
+class SharedPost(Base):
+    __tablename__ = "shared_posts"
+
+    id = Column(Integer,primary_key=True)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"))
+    from_user_id = Column(Integer, ForeignKey("users.id"))
+    to_user_id = Column(Integer, ForeignKey("users.id"))
+    message = Column(String, nullable=True)  # Optional caption when sharing
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    post = relationship("Post",back_populates="shared_posts")
+    from_user = relationship("User", foreign_keys=[from_user_id],back_populates="sent_posts")
+    to_user = relationship("User", foreign_keys=[to_user_id],back_populates="received_posts")
+
 class OTP(Base):
     __tablename__ = "otps"
     id = Column(Integer, primary_key=True, index=True)
@@ -54,6 +70,8 @@ class Post(Base):
     views=Column(Integer,default=0,server_default=text("0"))
     comments_cnt=Column(Integer,default=0,server_default=text("0"))
     hashtags=Column(String,nullable=True)
+
+    shared_posts = relationship("SharedPost",back_populates="post")
 class PostView(Base):
     __tablename__ = "post_views"
     post_id = Column(Integer, ForeignKey("posts.id",ondelete="CASCADE"),primary_key=True)
@@ -94,7 +112,8 @@ class User(Base):
         backref='voters'  # allows posts to access users who voted on them
     )
       total_comments=relationship('Comments',backref='user')
-
+      sent_posts = relationship("SharedPost", foreign_keys=[SharedPost.from_user_id],back_populates="from_user")
+      received_posts = relationship("SharedPost", foreign_keys=[SharedPost.to_user_id],back_populates="to_user")
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True, index=True)

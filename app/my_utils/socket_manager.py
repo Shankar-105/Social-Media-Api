@@ -23,7 +23,7 @@ class ConnectionManager:
             del self.active_connections[user_id]
             print(f"User {user_id} disconnected")
 
-    async def send_personal_message(self,message: dict,user_id: int):
+    async def send_personal_message(self,message:dict,user_id:int):
         conn = self.active_connections.get(user_id)
         if conn:
             await conn["ws"].send_text(json.dumps(message))
