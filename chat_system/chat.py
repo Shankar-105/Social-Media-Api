@@ -45,13 +45,6 @@ async def websocket_endpoint(
         models.Message.is_read == False
     ).order_by(models.Message.created_at.asc()).all()
 
-    for msg in missed_messages:
-        message=f"User {msg.sender_id}: {msg.content}"
-        try:
-            await websocket.send_text(message)
-        except:
-            print("Connection lost during missed msg delivery")
-            break
     if missed_messages:
         db.query(models.Message).filter(
             models.Message.receiver_id == user_id,
@@ -63,31 +56,48 @@ async def websocket_endpoint(
     models.SharedPost.to_user_id == user_id,
     models.SharedPost.is_read == False
 ).order_by(models.SharedPost.created_at.asc()).all()
-
-    for share in missed_shares:
-        post = share.post
-        preview = {
-            "type": "shared_post",
-            "shared_id": share.id,
-            "post_id": post.id,
-            "title": (post.title or "")[:60] + ("..." if len(post.title or "") > 60 else ""),
-            "media_type": post.media_type,
-            "media_url": post.media_path,
-            "owner_nickname": post.user.nickname,
-            "sender_nickname": share.from_user.nickname,
-            "message": share.message or f"{share.from_user.nickname} shared a post!",
-            "sent_at": share.created_at.isoformat()
-        }
-        try:
-            await websocket.send_text(json.dumps(preview))
-        except:
-            break
-        if missed_shares:
+    if missed_shares:
             db.query(models.SharedPost).filter(
                 models.SharedPost.to_user_id == user_id,
                 models.SharedPost.is_read == False
             ).update({"is_read": True}, synchronize_session=False)
             db.commit()
+    missed_content=[]
+    for m in missed_messages:
+        missed_content.append({
+            "type": "message",
+            "id": m.id,
+            "content": m.content,
+            "sender_id": m.sender_id,
+            "receiver_id":m.receiver_id,
+            "timestamp": m.created_at.isoformat(),
+            "is_read": m.is_read
+        })
+
+    for s in missed_shares:
+        missed_content.append({
+            "type": "shared_post",
+            "shared_id": s.id,
+            "post_id": s.post.id,
+            "sender_id": s.from_user_id,
+            "receiver_id":s.to_user_id,
+            "title": (s.post.title or "")[:60],
+            "media_type": s.post.media_type,
+            "media_url": s.post.media_path,
+            "sender_nickname": s.from_user.nickname,
+            "message": s.message,
+            "sent_at": s.created_at.isoformat(),
+            "is_read": s.is_read
+        })
+    missed_content.sort(key=lambda x : x.get("timestamp") if "timestamp" in  x else x.get("sent_at"))
+    if missed_content:
+        missed_content.reverse()
+    for item in missed_content:
+        try:
+            await websocket.send_json(item)
+        except:
+            print("WebSocket broken during missed content delivery")
+            break
     try:
         while True:
             data = await websocket.receive_text()
