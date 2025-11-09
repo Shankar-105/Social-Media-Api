@@ -2,6 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
+from chat_system import delete_msg
 import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
@@ -109,7 +110,13 @@ async def chat(
                   continue
 
     # If it's a pong, mark it and continue (don't treat as chat)
-            if message_data.get("type") == "pong":
+            if message_data.get("type") == "delete_for_everyone":
+                    await delete_msg.delete_for_everyone(
+                        message_id=message_data.get("message_id"),
+                        sender_id=current_user.id,
+                        receiver_id=receiver_id
+                    )
+            elif message_data.get("type") == "pong":
                 print("Pong received — user alive")
                 manager.mark_pong(user_id)
                 continue

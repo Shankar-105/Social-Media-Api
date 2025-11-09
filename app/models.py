@@ -130,3 +130,4 @@ class Message(Base):
     receiver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True),server_default=func.now())
     is_read = Column(Boolean,default=False)
+    is_deleted_for_everyone = Column(Boolean, default=False, server_default='false')

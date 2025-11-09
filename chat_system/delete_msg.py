@@ -28,3 +28,27 @@ async def deleteForMe(
     db.commit()
     db.refresh(deleted_msg)
     return {"message_id": msg_id, "detail": "Deleted for you"}
+
+async def delete_for_everyone(
+    message_id: int,
+    sender_id: int,
+    receiver_id: int,
+    db:Session =Depends(db.getDb)
+    ):
+    message = db.query(models.Message).filter(
+        models.Message.id == message_id,
+        models.Message.sender_id == sender_id
+    ).first()
+    if not message:
+        raise HTTPException(status_code=404,detail="Message not found")
+    # Mark as deleted for everyone
+    message.is_deleted_for_everyone = True
+    db.commit()
+    # Notify BOTH users instantly
+    payload = {
+        "type":"message_deleted",
+        "message_id": message_id,
+        "is_deleted_for_everyone": True
+    }
+    await manager.send_json_to_user(receiver_id,payload)
+    await manager.send_personal_message(sender_id,payload)

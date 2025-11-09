@@ -27,6 +27,11 @@ class ConnectionManager:
         conn = self.active_connections.get(user_id)
         if conn:
             await conn["ws"].send_text(json.dumps(message))
+        
+    async def send_json_to_user(self,message:dict,user_id:int):
+        conn = self.active_connections.get(user_id)
+        if conn:
+            await conn["ws"].send_text(json.dumps(message))
 
     async def send_to_user(self,message: str,receiver_id: int):
         conn = self.active_connections.get(receiver_id)
