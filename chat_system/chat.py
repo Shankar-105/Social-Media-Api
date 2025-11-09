@@ -73,50 +73,55 @@ async def websocket_endpoint(
                 print("Pong received — user alive")
                 manager.mark_pong(user_id)
                 continue
-            
-            # Save to DB (ALWAYS — even if offline)
-            msg = models.Message(
-                content=message_data["content"],
-                sender_id=user_id,
-                receiver_id=message_data["to"]
-            )
-            db.add(msg)
-            db.commit()
-            db.refresh(msg)
-            print("added to db")
-            # Check if receiver is in active_connections
-            receiver_id = msg.receiver_id
-            if receiver_id in manager.active_connections:
-                try:
-                    # Try to send (if fails, it's a zombie)
-                    await manager.send_to_user(
-                        f"User {user_id}: {msg.content}", 
-                        receiver_id
-                    )
-                    print("Message sent via WebSocket")
-                    msg.is_read = True
-                    db.commit()
-                    print(f"Message {msg.id} marked as READ")
-                except Exception as e:
-                    # Send failed → zombie socket → remove
-                    print(f"Send failed: {e}")
-                    manager.disconnect(receiver_id)
-                    # TODO: Later, send push notification here
+            elif message_data.get("type") == "typing":
+                 type=message_data.get("type")
+                 is_typing=message_data.get("is_typing")
+                 receiver_id=message_data.get("receiver_id")
+                 await manager.typing_status(type=type,receiver_id=receiver_id,typing_status=is_typing)
             else:
-                # Offline → don't send, just save in DB
-                print("Receiver offline — message saved in DB")
-                # TODO: Later, send push notification here
-            # Send response back to sender
-            response_data = {
-                "id": msg.id,
-                "content": msg.content,
-                "sender_id": msg.sender_id,
-                "receiver_id": msg.receiver_id,
-                "timestamp": msg.created_at.isoformat(),
-                "is_read":msg.is_read
-            }
-            await manager.send_personal_message(response_data, user_id)
-            print("Response sent to sender")
+            # Save to DB (ALWAYS — even if offline)
+                msg = models.Message(
+                    content=message_data["content"],
+                    sender_id=user_id,
+                    receiver_id=message_data["to"]
+                )
+                db.add(msg)
+                db.commit()
+                db.refresh(msg)
+                print("added to db")
+                # Check if receiver is in active_connections
+                receiver_id = msg.receiver_id
+                if receiver_id in manager.active_connections:
+                    try:
+                        # Try to send (if fails, it's a zombie)
+                        await manager.send_to_user(
+                            f"User {user_id}: {msg.content}", 
+                            receiver_id
+                        )
+                        print("Message sent via WebSocket")
+                        msg.is_read = True
+                        db.commit()
+                        print(f"Message {msg.id} marked as READ")
+                    except Exception as e:
+                        # Send failed → zombie socket → remove
+                        print(f"Send failed: {e}")
+                        manager.disconnect(receiver_id)
+                        # TODO: Later, send push notification here
+                else:
+                    # Offline → don't send, just save in DB
+                    print("Receiver offline — message saved in DB")
+                    # TODO: Later, send push notification here
+                # Send response back to sender
+                response_data = {
+                    "id": msg.id,
+                    "content": msg.content,
+                    "sender_id": msg.sender_id,
+                    "receiver_id": msg.receiver_id,
+                    "timestamp": msg.created_at.isoformat(),
+                    "is_read":msg.is_read
+                }
+                await manager.send_personal_message(response_data, user_id)
+                print("Response sent to sender")
     except WebSocketDisconnect:
         manager.disconnect(user_id)
     except Exception as e:

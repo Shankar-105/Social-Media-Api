@@ -35,7 +35,7 @@ def voteOnPost(post:sch.VoteModel=Body(...),db:Session=Depends(getDb),currentUse
                 if post.choice:
                     queriedPost.likes -= 1
                 else:
-                    queriedPost.disLikes -= 1
+                    queriedPost.dis_likes-= 1
                 db.commit()
                 db.refresh(queriedPost)
                 return {"message": "Vote removed successfully"}

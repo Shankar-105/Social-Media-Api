@@ -23,17 +23,17 @@ class ConnectionManager:
             del self.active_connections[user_id]
             print(f"User {user_id} disconnected")
 
-    async def send_personal_message(self, message: dict, user_id: int):
+    async def send_personal_message(self,message: dict,user_id: int):
         conn = self.active_connections.get(user_id)
         if conn:
             await conn["ws"].send_text(json.dumps(message))
 
-    async def send_to_user(self, message: str, receiver_id: int):
+    async def send_to_user(self,message: str,receiver_id: int):
         conn = self.active_connections.get(receiver_id)
         if conn:
             await conn["ws"].send_text(message)
 
-    def mark_pong(self, user_id: int):
+    def mark_pong(self,user_id: int):
         """Called by main reader when a pong is received for user_id."""
         conn = self.active_connections.get(user_id)
         if conn:
@@ -56,7 +56,7 @@ class ConnectionManager:
             # send ping
             await ws.send_json({"type": "ping"})
             # wait for main reader to set the event
-            await asyncio.wait_for(event.wait(), timeout=10.0)
+            await asyncio.wait_for(event.wait(), timeout=10000.0)
             return True
         except asyncio.TimeoutError:
             print(f"Timeout waiting for pong from user {user_id}")
@@ -74,6 +74,11 @@ class ConnectionManager:
                 if not ok:
                     print(f"Zombie: User {user_id} → removing")
                     self.disconnect(user_id)
-
+    async def typing_status(self,type:str,receiver_id:int,typing_status:bool):
+            message={
+            "type":type,
+            "typing_status":typing_status
+            }
+            return await self.send_personal_message(message=message,user_id=receiver_id)
 # single manager instance
 manager = ConnectionManager()
