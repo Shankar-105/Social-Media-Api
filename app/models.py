@@ -22,7 +22,7 @@ class SharedPost(Base):
     to_user_id = Column(Integer, ForeignKey("users.id"))
     message = Column(String, nullable=True)  # Optional caption when sharing
     created_at = Column(DateTime, default=datetime.utcnow)
-
+    is_read=Column(Boolean,default=False,server_default="false")
     # Relationships
     post = relationship("Post",back_populates="shared_posts")
     from_user = relationship("User", foreign_keys=[from_user_id],back_populates="sent_posts")

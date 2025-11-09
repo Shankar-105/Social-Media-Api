@@ -59,5 +59,12 @@ async def share_post(
         "message": payload.message or f"{me.nickname} shared a post with you!",
         "sent_at": shared.created_at.isoformat(),
     }
-    await manager.send_personal_message(json.dumps(preview),receiver.id)
+    if receiver.id in manager.active_connections:
+        try:
+            await manager.send_personal_message(json.dumps(preview), receiver.id)
+            # Mark as read immediately if delivered
+            shared.is_read = True
+            db.commit()
+        except:
+            pass  # Offline or error → stays unread
     return shared
