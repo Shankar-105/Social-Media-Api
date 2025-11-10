@@ -10,9 +10,8 @@ router=APIRouter(tags=['delete msg'])
 @router.post("/delete/for-me/{msg_id}")
 async def deleteForMe(
     msg_id: int,
-    token: str=Query(None,description="Search query params"),
     db: Session=Depends(db.getDb),
-    me: models.UniqueConstraint = Depends(oauth2.getCurrentUser),
+    me: models.User = Depends(oauth2.getCurrentUser),
 ):
     message=db.query(models.Message).filter(
         models.Message.id==msg_id,
@@ -26,21 +25,24 @@ async def deleteForMe(
     )
     db.add(deleted_msg)
     db.commit()
-    db.refresh(deleted_msg)
     return {"message_id": msg_id, "detail": "Deleted for you"}
 
 async def delete_for_everyone(
-    message_id: int,
+    db:Session,
+    message_id:int,
     sender_id: int,
     receiver_id: int,
-    db:Session =Depends(db.getDb)
     ):
+    print(f"Message ID {message_id} Sender ID {sender_id} Recv ID {receiver_id}")
     message = db.query(models.Message).filter(
         models.Message.id == message_id,
         models.Message.sender_id == sender_id
     ).first()
     if not message:
-        raise HTTPException(status_code=404,detail="Message not found")
+        # replaced the exception with return statement so that
+        # it doesnt disconnect the user
+        print("Message Not Found")
+        return
     # Mark as deleted for everyone
     message.is_deleted_for_everyone = True
     db.commit()
@@ -48,7 +50,8 @@ async def delete_for_everyone(
     payload = {
         "type":"message_deleted",
         "message_id": message_id,
-        "is_deleted_for_everyone": True
+        "is_deleted_for_everyone":True
     }
-    await manager.send_json_to_user(receiver_id,payload)
-    await manager.send_personal_message(sender_id,payload)
+    print(f"Sender ID {sender_id} Receiver ID {receiver_id}")
+    await manager.send_json_to_user(payload,receiver_id)
+    await manager.send_personal_message(payload,sender_id)

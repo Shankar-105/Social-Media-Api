@@ -7,7 +7,7 @@ import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
 
-ping_task=None
+# ping_task=None
 
 @router.websocket("/chat/ws/{user_id}")
 async def chat(
@@ -36,10 +36,10 @@ async def chat(
     # well if the token has passed all the above tests
     # make a connection request by using the manager obj 
     await manager.connect(user_id,websocket)
-    global ping_task
-    if ping_task is None:
-        ping_task = asyncio.create_task(manager.periodic_ping())
-        print("Security guard started — pinging every 20 sec")
+    # global ping_task
+    # if ping_task is None:
+    #     ping_task = asyncio.create_task(manager.periodic_ping())
+    #     print("Security guard started — pinging every 20 sec")
     
     missed_messages = db.query(models.Message).filter(
         models.Message.receiver_id == user_id,
@@ -112,9 +112,10 @@ async def chat(
     # If it's a pong, mark it and continue (don't treat as chat)
             if message_data.get("type") == "delete_for_everyone":
                     await delete_msg.delete_for_everyone(
+                        db=db,
                         message_id=message_data.get("message_id"),
                         sender_id=current_user.id,
-                        receiver_id=receiver_id
+                        receiver_id=message_data.get("receiver_id")
                     )
             elif message_data.get("type") == "pong":
                 print("Pong received — user alive")
