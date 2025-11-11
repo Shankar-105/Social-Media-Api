@@ -20,6 +20,7 @@ def get_chat_history(
 
     # CRITICAL: Hide undelivered messages from friend
     messages = db.query(models.Message).filter(
+        models.Message.is_deleted_for_everyone==False,
         (
             # My messages show all whether he has seen them or not
             (models.Message.sender_id == currentUser.id) &
@@ -31,7 +32,15 @@ def get_chat_history(
             (models.Message.is_read == True)
         )
     ).order_by(models.Message.created_at.desc())
+    deleted_by_me = db.query(models.DeletedMessage).filter(
+        models.DeletedMessage.user_id == currentUser.id
+    ).all()
 
+    deleted_ids = [d.message_id for d in deleted_by_me]
+
+    # 3. Filter in Python
+    final_msgs_toShow = [m for m in messages if m.id not in deleted_ids]
+    
     shared_posts = db.query(models.SharedPost).filter(
         (
             # My messages show all whether he has seen them or not
@@ -44,8 +53,9 @@ def get_chat_history(
             (models.SharedPost.is_read == True)
         )
     ).order_by(models.SharedPost.created_at.desc())
+
     chat_history=[]
-    for m in messages:
+    for m in final_msgs_toShow:
         chat_history.append({
             "type": "message",
             "id": m.id,
