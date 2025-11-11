@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     base_url:str
     # posts media folder
     media_folder:str
+    # maximum edit time
+    max_edit_time:int
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
