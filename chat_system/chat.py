@@ -111,11 +111,17 @@ async def chat(
 
     # If it's a pong, mark it and continue (don't treat as chat)
             if message_data.get("type") == "delete_for_everyone":
+                    try:
+                        msg_id = int(message_data["message_id"])
+                        recv_id = int(message_data["receiver_id"])
+                    except (ValueError, TypeError):
+                        print("Invalid ID format in delete_for_everyone")
+                        continue  # or send error
                     await delete_msg.delete_for_everyone(
                         db=db,
-                        message_id=message_data.get("message_id"),
+                        message_id=msg_id,
                         sender_id=current_user.id,
-                        receiver_id=message_data.get("receiver_id")
+                        receiver_id=recv_id
                     )
             elif message_data.get("type") == "pong":
                 print("Pong received — user alive")

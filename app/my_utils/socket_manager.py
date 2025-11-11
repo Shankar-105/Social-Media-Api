@@ -45,7 +45,8 @@ class ConnectionManager:
         
     async def send_json_to_user(self,message:dict,user_id:int):
         print(f"entered into mtd 'send_json_to_user' to send to {user_id}")
-        print(self.active_connections)
+        for i in self.active_connections.keys():
+          print(type(i))
         conn = self.active_connections.get(user_id)
         print(conn)
         if conn:
