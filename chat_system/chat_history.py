@@ -4,7 +4,7 @@ import app.schemas as sch
 from app import models,oauth2
 from app.db import getDb
 from sqlalchemy.orm import Session
-from sqlalchemy import or_,and_
+from sqlalchemy import or_,and_,select
 from typing import List
 from sqlalchemy.exc import IntegrityError
 
@@ -21,9 +21,14 @@ def get_chat_history(
 
     # CRITICAL: Hide undelivered messages from friend
     # firstly let us fetch out the 'delted for me' msgs by the current user
-    subq = db.query(models.DeletedMessage.message_id).filter(
-        models.DeletedMessage.user_id == currentUser.id
-    ).subquery()
+    subq=(
+        # to avoid the SAWaring we need put the subQuery inside the select() constructor
+        select(models.DeletedMessage.message_id)
+        .where(models.DeletedMessage.user_id == currentUser.id)
+        .scalar_subquery()  # imp  because we are using this sub-query inside the in_ 
+        # so we need to ensure not all the cols are passed but that one required column
+        # which is also clearly mentioned in the select() the 'message_id'
+    )
     # now let us use that subquery in NOT EXISTS and simply query off the final messages
     messages = db.query(models.Message).filter(
         # 1. Not deleted for everyone
