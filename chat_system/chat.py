@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-from chat_system import delete_msg
+from chat_system import delete_msg,delete_shares
 import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
@@ -127,6 +127,20 @@ async def chat(
                 print("Pong received — user alive")
                 manager.mark_pong(user_id)
                 continue
+            # In your WebSocket handler (e.g., connect.py or chat.py)
+            elif message_data.get("type") == "delete_share_for_everyone":
+                try:
+                        share_id = int(message_data["message_id"])
+                        recv_id = int(message_data["receiver_id"])
+                except (ValueError, TypeError):
+                        print("Invalid ID format in delete_for_everyone")
+                        continue  # or send error
+                await delete_shares.delete_share_for_everyone(
+                        db=db,
+                        share_id=share_id,
+                        sender_id=current_user.id,
+                        receiver_id=recv_id
+                    )
             elif message_data.get("type") == "typing":
                  type=message_data.get("type")
                  is_typing=message_data.get("is_typing")
