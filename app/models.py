@@ -22,6 +22,7 @@ class SharedPost(Base):
     message = Column(String, nullable=True)  # Optional caption when sharing
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read=Column(Boolean,default=False,server_default="false")
+    is_deleted_for_everyone = Column(Boolean, default=False, server_default='false')
     # Relationships
     post = relationship("Post",back_populates="shared_posts")
     from_user = relationship("User", foreign_keys=[from_user_id],back_populates="sent_posts")
@@ -33,8 +34,23 @@ class DeletedMessage(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    deleted_at = Column(DateTime, default=datetime.utcnow)
     # Unique: one user can't delete same msg twice
     __table_args__ = (UniqueConstraint('user_id', 'message_id',name='uq_user_deleted_msg'),)
+
+# models.py
+class DeletedSharedPost(Base):
+    __tablename__ = "deleted_shared_posts"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    shared_post_id = Column(Integer, ForeignKey("shared_posts.id", ondelete="CASCADE"))
+    deleted_at = Column(DateTime, default=datetime.utcnow)
+    # Relationships
+    # which user has deleted
+    user = relationship("User")
+    # which post has been deleted
+    shared_post = relationship("SharedPost")
 
 class OTP(Base):
     __tablename__ = "otps"
