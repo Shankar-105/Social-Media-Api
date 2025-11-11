@@ -35,19 +35,17 @@ async def chat(
         return
     # well if the token has passed all the above tests
     # make a connection request by using the manager obj 
-    await manager.connect(user_id,websocket)
-    # global ping_task
-    # if ping_task is None:
-    #     ping_task = asyncio.create_task(manager.periodic_ping())
-    #     print("Security guard started — pinging every 20 sec")
-    
+
+    await manager.connect(user_id,websocket)    
     missed_messages = db.query(models.Message).filter(
+        models.Message.is_deleted_for_everyone==False,
         models.Message.receiver_id == user_id,
         models.Message.is_read == False
     ).order_by(models.Message.created_at.asc()).all()
 
     if missed_messages:
         db.query(models.Message).filter(
+            models.Message.is_deleted_for_everyone==False,
             models.Message.receiver_id == user_id,
             models.Message.is_read == False
         ).update({"is_read":True},synchronize_session=False)
@@ -57,12 +55,14 @@ async def chat(
     models.SharedPost.to_user_id == user_id,
     models.SharedPost.is_read == False
 ).order_by(models.SharedPost.created_at.asc()).all()
+    
     if missed_shares:
             db.query(models.SharedPost).filter(
                 models.SharedPost.to_user_id == user_id,
                 models.SharedPost.is_read == False
             ).update({"is_read": True}, synchronize_session=False)
             db.commit()
+
     missed_content=[]
     for m in missed_messages:
         missed_content.append({
@@ -177,7 +177,21 @@ async def chat(
                 await manager.send_personal_message(response_data, user_id)
                 print("Response sent to sender")
     except WebSocketDisconnect:
-        manager.disconnect(user_id)
+        # this is executed only when the client tries to disconnect
+        # like in development clicking on the disconnect button in the
+        # tools like postman or in production just getting out of the app
+        # at this point of time remember the frontend tool has already
+        # intiated the close that is it has already sent a ws.close()
+        # frame to the websocket server and it handles it you dont need 
+        # again do a ws.close() here which leads to the run time errors
+        # like its happening now so we take off that ws.close() and only
+        # do a ws.close() manually that is we writing ws.close() only when
+        # we want to kick off the user that is when he doesnt send a pong
+        # and cases like that so we use a client_intitated var and do few
+        # checks on it inside the disconnect method 
+        manager.disconnect(user_id,client_initiated=True)
     except Exception as e:
+        # some probelm with the client so we (the server) are 
+        # kicking him offf after printing whats the probelm
         print(e)
-        manager.disconnect(user_id)
+        manager.disconnect(user_id,client_initiated=False)

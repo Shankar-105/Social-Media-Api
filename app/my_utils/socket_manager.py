@@ -3,6 +3,7 @@ from fastapi import WebSocket
 from typing import Dict
 import json, asyncio
 from datetime import datetime
+from fastapi.websockets import WebSocketState
 
 class ConnectionManager:
     def __init__(self):
@@ -21,20 +22,21 @@ class ConnectionManager:
 )
         print(f"User {user_id} connected via WebSocket")
 
-    def disconnect(self, user_id: int):
+    def disconnect(self, user_id: int,client_initiated: bool = True):
         conn = self.active_connections.get(user_id)
         if conn:
             task = conn.get("ping_task")
             if task:
                 task.cancel()  # cancel the per-connection pinger
-            try:
-                # best-effort close websocket (schedule it)
-                ws = conn.get("ws")
-                if ws is not None:
-                    # don't await here; schedule close so we don't block
-                    asyncio.create_task(ws.close())
-            except Exception:
-                pass
+                # if client hasnt intiated that is we the server are kicking off
+                # this guyy so there will be no incoming ws.close() except ours
+                if not client_initiated:
+                    ws = conn.get("ws")
+                    if ws and ws.application_state == WebSocketState.CONNECTED:
+                        try:
+                            asyncio.create_task(ws.close(code=1000, reason="Server initiated disconnect"))
+                        except:
+                            pass
             del self.active_connections[user_id]
             print(f"User {user_id} disconnected")
 
@@ -61,7 +63,7 @@ class ConnectionManager:
     def mark_pong(self,user_id: int):
         """Called by main reader when a pong is received for user_id."""
         conn = self.active_connections.get(user_id)
-        if conn:
+        if conn and conn["ws"].application_state == WebSocketState.CONNECTED:
             # set event so send_ping can continue
             conn["pong_event"].set()
             conn["last_pong"] = datetime.utcnow()
@@ -100,7 +102,7 @@ class ConnectionManager:
                 if not ok:
                     print(f"Zombie: User {user_id} → removing (per-connection pinger)")
                     # disconnect will cancel this task and remove conn
-                    self.disconnect(user_id)
+                    self.disconnect(user_id,client_initiated=False)
                     break
         except asyncio.CancelledError:
             # expected when disconnect cancels this task
