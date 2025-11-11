@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-from chat_system import delete_msg,delete_shares
+from chat_system import delete_msg,delete_shares,edit_msg
 import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
@@ -108,8 +108,7 @@ async def chat(
         # Not a JSON message (could be plain chat text) — handle or ignore
                   print("Received non-JSON chat payload; ignoring or handle as needed:", repr(data))
                   continue
-
-    # If it's a pong, mark it and continue (don't treat as chat)
+            # if the type is delete_for_everyone
             if message_data.get("type") == "delete_for_everyone":
                     try:
                         msg_id = int(message_data["message_id"])
@@ -123,16 +122,33 @@ async def chat(
                         sender_id=current_user.id,
                         receiver_id=recv_id
                     )
+            elif message_data.get("type") == "edit_message":
+                try:
+                        msg_id = int(message_data.get("msg_id"))
+                        new_content = message_data.get("new_content").strip()
+                        recv_id = int(message_data.get("receiver_id"))
+                except (ValueError,TypeError):
+                        print("Invalid ID format in edit_msg")
+                        continue  # or send error
+                await edit_msg.edit_message(
+                        db=db,
+                        message_id=msg_id,
+                        new_content=new_content,
+                        sender_id=current_user.id,
+                        recv_id=recv_id
+                    )
+            # if its a pong then simply mark it and set the event
             elif message_data.get("type") == "pong":
                 print("Pong received — user alive")
                 manager.mark_pong(user_id)
                 continue
-            # In your WebSocket handler (e.g., connect.py or chat.py)
+            # if its of type delete_share_for_everyone
+            # simply call the method whcih does that job
             elif message_data.get("type") == "delete_share_for_everyone":
                 try:
                         share_id = int(message_data["message_id"])
                         recv_id = int(message_data["receiver_id"])
-                except (ValueError, TypeError):
+                except (ValueError,TypeError):
                         print("Invalid ID format in delete_for_everyone")
                         continue  # or send error
                 await delete_shares.delete_share_for_everyone(
@@ -141,11 +157,13 @@ async def chat(
                         sender_id=current_user.id,
                         receiver_id=recv_id
                     )
+            # if its of type - typing 
             elif message_data.get("type") == "typing":
                  type=message_data.get("type")
                  is_typing=message_data.get("is_typing")
                  receiver_id=message_data.get("receiver_id")
                  await manager.typing_status(type=type,receiver_id=receiver_id,typing_status=is_typing)
+            # else then its a chat message
             else:
             # Save to DB (ALWAYS — even if offline)
                 msg = models.Message(

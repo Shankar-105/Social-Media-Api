@@ -8,7 +8,7 @@ from datetime import datetime
 router=APIRouter(tags=['delete msg'])
 
 @router.post("/delete/for-me/{msg_id}")
-async def deleteForMe(
+def deleteForMe(
     msg_id: int,
     db: Session=Depends(db.getDb),
     me: models.User = Depends(oauth2.getCurrentUser),

@@ -148,3 +148,14 @@ class Message(Base):
     created_at = Column(DateTime(timezone=True),server_default=func.now())
     is_read = Column(Boolean,default=False)
     is_deleted_for_everyone = Column(Boolean, default=False, server_default='false')
+    is_edited=Column(Boolean,default=False,server_default="false")
+    edited_at=Column(DateTime,nullable=True)
+
+    # optional relationships for later maybe useful
+    # when you do a Obj.sender where Obj is the object of class Message
+    # it returns which user has sent that message and the same for Obj.recceiver
+    # and also when you add a 'backpopulates' or 'backref' with a somename and on
+    # User side you do that Object.thatBackrefName on a User object then it returns  
+    # a list of all the messages that particular user has sent or received
+    sender = relationship("User", foreign_keys=[sender_id])
+    receiver = relationship("User", foreign_keys=[receiver_id])
