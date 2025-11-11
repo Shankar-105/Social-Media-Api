@@ -46,6 +46,7 @@ class DeletedSharedPost(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     shared_post_id = Column(Integer, ForeignKey("shared_posts.id", ondelete="CASCADE"))
     deleted_at = Column(DateTime, default=datetime.utcnow)
+    
     # Relationships
     # which user has deleted
     user = relationship("User")

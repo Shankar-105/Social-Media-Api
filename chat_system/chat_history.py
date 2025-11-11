@@ -35,14 +35,24 @@ def get_chat_history(
         models.Message.is_deleted_for_everyone == False,
         # 2. Is between these two users
         or_(
+            # show everything from sender side even if read or not
             and_(models.Message.sender_id == currentUser.id, models.Message.receiver_id == friend_id),
-            and_(models.Message.sender_id == friend_id, models.Message.receiver_id == currentUser.id)
+            # from receiver side show only the messages which are actually delivered
+            and_(models.Message.sender_id == friend_id, models.Message.receiver_id == currentUser.id,
+                 models.Message.is_read == True)
         ),
         # 3. Not deleted by THIS user (NOT EXISTS)
         ~models.Message.id.in_(subq)
     ).order_by(models.Message.created_at.desc()).all()
     # shared posts
+
+    deleted_shared_subq = (
+    select(models.DeletedSharedPost.shared_post_id)
+    .where(models.DeletedSharedPost.user_id == currentUser.id)
+    .scalar_subquery()
+)
     shared_posts = db.query(models.SharedPost).filter(
+        models.SharedPost.is_deleted_for_everyone == False,
         (
             # My messages show all whether he has seen them or not
             (models.SharedPost.from_user_id == currentUser.id) &
@@ -52,8 +62,10 @@ def get_chat_history(
             (models.SharedPost.from_user_id == friend_id) &
             (models.SharedPost.to_user_id == currentUser.id) &
             (models.SharedPost.is_read == True)
+        ),(
+        ~models.SharedPost.id.in_(deleted_shared_subq)    
         )
-    ).order_by(models.SharedPost.created_at.desc())
+    ).order_by(models.SharedPost.created_at.desc()).all()
 
     chat_history=[]
     for m in messages:
