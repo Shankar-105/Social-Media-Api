@@ -4,6 +4,7 @@ import app.schemas as sch
 from app import models,oauth2
 from app.db import getDb
 from sqlalchemy.orm import Session
+from sqlalchemy import or_,and_
 from typing import List
 from sqlalchemy.exc import IntegrityError
 
@@ -19,28 +20,23 @@ def get_chat_history(
         raise HTTPException(status_code=400, detail="Cannot chat with yourself")
 
     # CRITICAL: Hide undelivered messages from friend
-    messages = db.query(models.Message).filter(
-        models.Message.is_deleted_for_everyone==False,
-        (
-            # My messages show all whether he has seen them or not
-            (models.Message.sender_id == currentUser.id) &
-            (models.Message.receiver_id == friend_id)
-        ) | (
-            # Friend's messages only show delivered msgs is_read -> True
-            (models.Message.sender_id == friend_id) &
-            (models.Message.receiver_id == currentUser.id) &
-            (models.Message.is_read == True)
-        )
-    ).order_by(models.Message.created_at.desc())
-    deleted_by_me = db.query(models.DeletedMessage).filter(
+    # firstly let us fetch out the 'delted for me' msgs by the current user
+    subq = db.query(models.DeletedMessage.message_id).filter(
         models.DeletedMessage.user_id == currentUser.id
-    ).all()
-
-    deleted_ids = [d.message_id for d in deleted_by_me]
-
-    # 3. Filter in Python
-    final_msgs_toShow = [m for m in messages if m.id not in deleted_ids]
-    
+    ).subquery()
+    # now let us use that subquery in NOT EXISTS and simply query off the final messages
+    messages = db.query(models.Message).filter(
+        # 1. Not deleted for everyone
+        models.Message.is_deleted_for_everyone == False,
+        # 2. Is between these two users
+        or_(
+            and_(models.Message.sender_id == currentUser.id, models.Message.receiver_id == friend_id),
+            and_(models.Message.sender_id == friend_id, models.Message.receiver_id == currentUser.id)
+        ),
+        # 3. Not deleted by THIS user (NOT EXISTS)
+        ~models.Message.id.in_(subq)
+    ).order_by(models.Message.created_at.desc()).all()
+    # shared posts
     shared_posts = db.query(models.SharedPost).filter(
         (
             # My messages show all whether he has seen them or not
@@ -55,7 +51,7 @@ def get_chat_history(
     ).order_by(models.SharedPost.created_at.desc())
 
     chat_history=[]
-    for m in final_msgs_toShow:
+    for m in messages:
         chat_history.append({
             "type": "message",
             "id": m.id,
