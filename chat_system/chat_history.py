@@ -76,6 +76,7 @@ def get_chat_history(
             "sender_id": m.sender_id,
             "receiver_id":m.receiver_id,
             "timestamp": m.created_at.isoformat(),
+            "is_edited" : m.is_edited,
             "is_read": m.is_read
         })
 
