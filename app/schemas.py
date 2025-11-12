@@ -173,3 +173,7 @@ class SharedPostResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ReactionPayload(BaseModel):
+    message_id: int
+    reaction: str  # e.g., "❤️"

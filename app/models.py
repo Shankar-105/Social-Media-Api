@@ -151,6 +151,7 @@ class Message(Base):
     is_edited=Column(Boolean,default=False,server_default="false")
     edited_at=Column(DateTime,nullable=True)
     read_at = Column(DateTime(timezone=True),nullable=True)
+    reaction = Column(String, nullable=True)
     # optional relationships for later maybe useful
     # when you do a Obj.sender where Obj is the object of class Message
     # it returns which user has sent that message and the same for Obj.recceiver
