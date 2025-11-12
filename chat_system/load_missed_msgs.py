@@ -19,7 +19,7 @@ async def load_missed_content(
                 models.Message.is_deleted_for_everyone==False,
                 models.Message.receiver_id == user_id,
                 models.Message.is_read == False
-            ).update({"is_read":True},synchronize_session=False)
+            ).update({"is_read":True,"read_at":datetime.utcnow()},synchronize_session=False)
             db.commit()
 
         missed_shares = db.query(models.SharedPost).filter(

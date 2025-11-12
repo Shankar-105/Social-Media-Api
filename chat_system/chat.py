@@ -38,7 +38,7 @@ async def chat(
 
     await manager.connect(user_id,websocket)   
     # load missed content  
-    missed_content=load_missed_msgs.load_missed_content(db,user_id=current_user.id)
+    missed_content=await load_missed_msgs.load_missed_content(current_user.id,db)
     if missed_content:
         missed_content.reverse()
     for item in missed_content:
@@ -134,6 +134,7 @@ async def chat(
                         )
                         print("Message sent via WebSocket")
                         msg.is_read = True
+                        msg.read_at=datetime.utcnow()
                         db.commit()
                         print(f"Message {msg.id} marked as READ")
                     except Exception as e:

@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from app import models,config
 from app.db import engine
 from app.routes import changepassword, posts,users,auth,like,connect,comment,search,me,feed
-from chat_system import chat,chat_history,share,delete_msg,delete_shares,edit_msg
+from chat_system import chat,chat_history,share,delete_msg,delete_shares,edit_msg,msg_info
 from fastapi.middleware.cors import CORSMiddleware
 models.Base.metadata.create_all(bind=engine)
 
@@ -45,3 +45,4 @@ app.include_router(share.router)
 app.include_router(delete_msg.router)
 app.include_router(delete_shares.router)
 app.include_router(edit_msg.router)
+app.include_router(msg_info.router)
