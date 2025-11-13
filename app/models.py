@@ -23,6 +23,7 @@ class SharedPost(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read=Column(Boolean,default=False,server_default="false")
     is_deleted_for_everyone = Column(Boolean, default=False, server_default='false')
+    reaction_cnt=Column(Integer,default=0,server_default="0")
     # Relationships
     post = relationship("Post",back_populates="shared_posts")
     from_user = relationship("User", foreign_keys=[from_user_id],back_populates="sent_posts")
@@ -139,6 +140,7 @@ class User(Base):
       total_comments=relationship('Comments',backref='user')
       sent_posts = relationship("SharedPost", foreign_keys=[SharedPost.from_user_id],back_populates="from_user")
       received_posts = relationship("SharedPost", foreign_keys=[SharedPost.to_user_id],back_populates="to_user")
+      shared_post_reactions = relationship("SharedPostReaction", back_populates="user")
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True, index=True)
@@ -179,3 +181,15 @@ class MessageReaction(Base):
     # get the user reacted
     user = relationship("User", backref="message_reactions")
     __table_args__ = (UniqueConstraint('message_id', 'user_id', name='unique_user_reaction'),)
+
+class SharedPostReaction(Base):
+    __tablename__ = "shared_post_reactions"
+
+    id = Column(Integer, primary_key=True)
+    shared_post_id = Column(Integer, ForeignKey("shared_posts.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reaction = Column(String,nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="shared_post_reactions")
+    __table_args__ = (UniqueConstraint('shared_post_id', 'user_id', name='unique_shared_post_reaction'),)

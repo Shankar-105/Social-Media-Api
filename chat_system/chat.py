@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-from chat_system import delete_msg,delete_shares,edit_msg,load_missed_msgs,msg_reaction
+from chat_system import delete_msg,delete_shares,edit_msg,load_missed_msgs,msg_reaction,share_reaction
 import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
@@ -79,6 +79,16 @@ async def chat(
                      reaction=reaction_emoji
                 )
                 await msg_reaction.react(reactionPayLoad,reacted_by,db)
+            elif message_data.get("type") == "shared_post_reaction":
+                reacted_by = current_user.id
+                reaction_emoji = message_data.get("reaction")
+                shared_id = message_data.get("shared_post_id")
+
+                reaction_payload = schemas.ReactionPayload(
+                    message_id=shared_id,  # reuse field
+                    reaction=reaction_emoji
+                )
+                await share_reaction.react_to_shared_post(reaction_payload,reacted_by,db)
             elif message_data.get("type") == "edit_message":
                 try:
                         msg_id = int(message_data.get("msg_id"))
