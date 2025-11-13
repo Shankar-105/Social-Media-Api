@@ -160,7 +160,14 @@ class Message(Base):
     # a list of all the messages that particular user has sent or received
     sender = relationship("User", foreign_keys=[sender_id])
     receiver = relationship("User", foreign_keys=[receiver_id])
-
+    # get the list of all reacted users on this message
+    reacted_users = relationship(
+    "User",
+    secondary="message_reactions",
+    primaryjoin="Message.id == message_reactions.c.message_id",
+    secondaryjoin="User.id == message_reactions.c.user_id",
+    viewonly=True
+    )
 # separate message reaction table to track who reacted to teh msg
 class MessageReaction(Base):
     __tablename__ = "message_reactions"
@@ -169,4 +176,6 @@ class MessageReaction(Base):
     message_id = Column(Integer, ForeignKey("messages.id"),nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"),nullable=False)
     reaction = Column(String,nullable=False)  # ex: "❤️", "😂"
+    # get the user reacted
+    user = relationship("User", backref="message_reactions")
     __table_args__ = (UniqueConstraint('message_id', 'user_id', name='unique_user_reaction'),)

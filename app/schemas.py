@@ -177,3 +177,9 @@ class SharedPostResponse(BaseModel):
 class ReactionPayload(BaseModel):
     message_id: int
     reaction: str  # e.g., "❤️"
+
+class ReactedUsers(BaseModel):
+    user_id: int
+    username: str
+    profile_pic: Optional[str] = None
+    reaction: str

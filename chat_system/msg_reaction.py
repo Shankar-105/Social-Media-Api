@@ -3,8 +3,38 @@ from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
 from datetime import datetime
-
+from typing import List
 router=APIRouter(tags=['msg reactions'])
+
+
+@router.get("/msgs/{msg_id}/msg_reaction_info",response_model=List[schemas.ReactedUsers])
+def msg_reactions(
+    msg_id:int,
+    db: Session = Depends(db.getDb),
+    currentUser: models.User = Depends(oauth2.getCurrentUser)
+):
+  msg = db.query(models.Message).filter(models.Message.id == msg_id).first()
+  if not msg:
+        raise HTTPException(404, "Message not found")
+    # veryyy Optional highly impossible
+  if msg.sender_id != currentUser.id and msg.receiver_id != currentUser.id:
+        return
+   # reacted_users=msg.reacted_users
+  reactions = (
+        db.query(models.MessageReaction)
+        .filter(models.MessageReaction.message_id == msg_id)
+        .all()
+    )
+  return [
+        {
+            "user_id": r.user.id,
+            "username": r.user.username,
+            "profile_pic": r.user.profile_picture,
+            "reaction": r.reaction
+        }
+        for r in reactions
+    ]
+
 
 async def react(
     reaction:schemas.ReactionPayload,
