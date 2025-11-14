@@ -43,6 +43,8 @@ async def load_missed_content(
                 "sender_id": m.sender_id,
                 "receiver_id":m.receiver_id,
                 "is_edited" : m.is_edited,
+                "reaction_count": m.reaction_cnt,
+                "reactions": m.reactions,
                 "timestamp": m.created_at.isoformat(),
                 "is_read": m.is_read
             })
@@ -59,6 +61,7 @@ async def load_missed_content(
                 "media_url": s.post.media_path,
                 "sender_nickname": s.from_user.nickname,
                 "caption_message": s.message,
+                "reactions": s.reactions,
                 "sent_at": s.created_at.isoformat(),
                 "is_read": s.is_read
             })

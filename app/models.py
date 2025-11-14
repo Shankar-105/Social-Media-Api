@@ -28,6 +28,11 @@ class SharedPost(Base):
     post = relationship("Post",back_populates="shared_posts")
     from_user = relationship("User", foreign_keys=[from_user_id],back_populates="sent_posts")
     to_user = relationship("User", foreign_keys=[to_user_id],back_populates="received_posts")
+    reactions = relationship(
+        "SharedPostReaction",
+        backref="shared_post",
+        cascade="all, delete-orphan"
+    )
 
 # models.py
 class DeletedMessage(Base):
@@ -162,6 +167,12 @@ class Message(Base):
     # a list of all the messages that particular user has sent or received
     sender = relationship("User", foreign_keys=[sender_id])
     receiver = relationship("User", foreign_keys=[receiver_id])
+    # get the hecking list of all reactions on this message
+    reactions = relationship(
+        "MessageReaction",
+        backref="message",
+        cascade="all, delete-orphan"
+    )
     # get the list of all reacted users on this message
     reacted_users = relationship(
     "User",

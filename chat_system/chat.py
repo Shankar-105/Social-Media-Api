@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-from chat_system import delete_msg,delete_shares,edit_msg,load_missed_msgs,msg_reaction,share_reaction
+from chat_system import delete_msg,delete_shares,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg
 import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
@@ -130,13 +130,24 @@ async def chat(
                  is_typing=message_data.get("is_typing")
                  receiver_id=message_data.get("receiver_id")
                  await manager.typing_status(type=type,receiver_id=receiver_id,typing_status=is_typing)
+
+            elif message_data.get("type") == "reply_message":
+                receiver_id=int(message_data.get("to"))
+                content=message_data.get("content")
+                reply_msg_id=int(message_data.get("reply_msg_id"))
+                payload=schemas.ReplyMessageSchema(
+                     to=receiver_id,
+                     reply_msg_id=reply_msg_id,
+                     content=content
+                )
+                await reply_msg.reply_msg(payload,current_user.id,db)
             # else then its a chat message
             else:
             # Save to DB (ALWAYS — even if offline)
                 msg = models.Message(
-                    content=message_data["content"],
+                    content=message_data.get("content"),
                     sender_id=user_id,
-                    receiver_id=message_data["to"]
+                    receiver_id=message_data.get("to")
                 )
                 db.add(msg)
                 db.commit()

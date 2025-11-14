@@ -183,3 +183,8 @@ class ReactedUsers(BaseModel):
     username: str
     profile_pic: Optional[str] = None
     reaction: str
+
+class ReplyMessageSchema(BaseModel):
+    to:int
+    reply_msg_id:int
+    content:str

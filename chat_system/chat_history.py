@@ -77,6 +77,8 @@ def get_chat_history(
             "receiver_id":m.receiver_id,
             "timestamp": m.created_at.isoformat(),
             "is_edited" : m.is_edited,
+            "reaction_count": m.reaction_cnt,
+            "reactions": m.reactions,
             "is_read": m.is_read
         })
 
@@ -92,6 +94,7 @@ def get_chat_history(
             "media_url": s.post.media_path,
             "sender_nickname": s.from_user.nickname,
             "message": s.message,
+            "reactions": s.reactions,
             "sent_at": s.created_at.isoformat(),
             "is_read": s.is_read
         })
