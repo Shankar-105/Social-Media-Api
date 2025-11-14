@@ -36,18 +36,32 @@ async def load_missed_content(
 
         missed_content=[]
         for m in missed_messages:
-            missed_content.append({
-                "type": "message",
-                "id": m.id,
-                "content": m.content,
-                "sender_id": m.sender_id,
-                "receiver_id":m.receiver_id,
-                "is_edited" : m.is_edited,
-                "reaction_count": m.reaction_cnt,
-                "reactions": m.reactions,
-                "timestamp": m.created_at.isoformat(),
-                "is_read": m.is_read
-            })
+            base_msg = {
+            "type": "message",
+            "id": m.id,
+            "content": m.content,
+            "sender_id": m.sender_id,
+            "receiver_id": m.receiver_id,
+            "timestamp": m.created_at.isoformat(),
+            "is_edited": m.is_edited,
+            "reaction_count": m.reaction_cnt,
+            "reactions": m.reactions,
+            "is_read": m.is_read
+        }
+            if m.is_reply_msg:
+                original_msg=m.replies_to.original_msg
+                if original_msg:
+                    base_msg.update({
+                        "is_reply": True,
+                        "reply_to": {
+                            "msg_id": m.original_msg.id,
+                            "content": m.original_msg.content,
+                            "sender_name": m.original_msg.sender.username if m.original_msg.sender else "Unknown"
+                        }
+                    })
+                else:
+                    base_msg["is_reply"] = False 
+            missed_content.append(base_msg)
 
         for s in missed_shares:
             missed_content.append({

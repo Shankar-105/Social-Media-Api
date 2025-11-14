@@ -15,11 +15,18 @@ async def reply_msg(
         msg = models.Message(
                         content=payload.content,
                         sender_id=user_id,
-                        receiver_id=payload.to
+                        receiver_id=payload.to,
+                        is_reply_msg=True
                     )
         db.add(msg)
         db.commit()
         db.refresh(msg)
+        reply_link = models.MessageReplies(
+            reply_id=msg.id,
+            original_id=payload.reply_msg_id
+        )
+        db.add(reply_link)
+        db.commit()
         print("added to db")
         # Check if receiver is in active_connections
         receiver_id = msg.receiver_id

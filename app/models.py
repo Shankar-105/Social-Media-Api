@@ -146,6 +146,15 @@ class User(Base):
       sent_posts = relationship("SharedPost", foreign_keys=[SharedPost.from_user_id],back_populates="from_user")
       received_posts = relationship("SharedPost", foreign_keys=[SharedPost.to_user_id],back_populates="to_user")
       shared_post_reactions = relationship("SharedPostReaction", back_populates="user")
+class MessageReplies(Base):
+    __tablename__ = "message_replies"
+
+    reply_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
+    original_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
+
+    # Relationships (optional, for easier querying)
+    reply_msg = relationship("Message", foreign_keys=[reply_id])
+    original_msg = relationship("Message", foreign_keys=[original_id])
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True, index=True)
@@ -159,6 +168,7 @@ class Message(Base):
     edited_at=Column(DateTime,nullable=True)
     read_at = Column(DateTime(timezone=True),nullable=True)
     reaction_cnt=Column(Integer,default=0,server_default="0")
+    is_reply_msg = Column(Boolean, default=False)
     # optional relationships for later maybe useful
     # when you do a Obj.sender where Obj is the object of class Message
     # it returns which user has sent that message and the same for Obj.recceiver
@@ -180,6 +190,22 @@ class Message(Base):
     primaryjoin="Message.id == message_reactions.c.message_id",
     secondaryjoin="User.id == message_reactions.c.user_id",
     viewonly=True
+    )
+    # if the Message obj is a reply message
+    # thrn we need to know the original message
+    # so that we can simply display in chat_history isntead of complex joins
+    replied_by = relationship(
+        "MessageReplies",
+        foreign_keys=[MessageReplies.original_id],
+        back_populates="original_msg",
+        cascade="all, delete-orphan"
+    )
+    # One message can reply to one
+    replies_to = relationship(
+        "MessageReplies",
+        foreign_keys=[MessageReplies.reply_id],
+        back_populates="reply_msg",
+        uselist=False  # important: only one parent
     )
 # separate message reaction table to track who reacted to teh msg
 class MessageReaction(Base):
