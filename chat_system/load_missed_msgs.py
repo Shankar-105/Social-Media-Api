@@ -54,9 +54,9 @@ async def load_missed_content(
                     base_msg.update({
                         "is_reply": True,
                         "reply_to": {
-                            "msg_id": m.original_msg.id,
-                            "content": m.original_msg.content,
-                            "sender_name": m.original_msg.sender.username if m.original_msg.sender else "Unknown"
+                            "msg_id": original_msg.id,
+                            "content": original_msg.content,
+                            "sender_name": original_msg.sender.username if original_msg.sender else "Unknown"
                         }
                     })
                 else:
