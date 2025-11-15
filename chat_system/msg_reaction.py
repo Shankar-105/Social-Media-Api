@@ -53,18 +53,22 @@ async def react(
     # if there's no such record in MessageReaction Table
     # then this is the first new reaction by the user with id as user_id 
     # so create a MessageReaction object and add it to that tble
+    global isNewRecord
     if not msg:
+        isNewRecord=True
         new_reaction=models.MessageReaction(message_id=reaction.message_id,user_id=user_id,reaction=reaction.reaction)
         db.add(new_reaction)
         the_msg.reaction_cnt+=1
     # the msg reaction already exists in that tbale but the
     # user has again sent the same reaction well then remove it 
     elif msg and msg.reaction == reaction.reaction:
-        db.delete(msg.reaction)
+        isNewRecord=False
+        db.delete(msg)
         the_msg.reaction_cnt-=1
     # msg exists and the new reation isnt the old one
     # well then he sent a brand new reaciton just change it
     else:
+        isNewRecord=True
         msg.reaction=reaction.reaction
     # any changes commit thehm off
     db.commit()
@@ -74,7 +78,7 @@ async def react(
         "type": "reaction_update",
         "data": {
             "message_id": the_msg.id,
-            "reaction": msg.reaction if msg.reaction else "removed",
+            "reaction": reaction.reaction if isNewRecord else None,
             "reaction_count":the_msg.reaction_cnt,
             "reacted_by": user_id
         }

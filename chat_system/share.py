@@ -61,7 +61,7 @@ async def share_post(
     }
     if receiver.id in manager.active_connections:
         try:
-            await manager.send_personal_message(json.dumps(preview), receiver.id)
+            await manager.send_json_to_user(json.dumps(preview),receiver.id)
             # Mark as read immediately if delivered
             shared.is_read = True
             db.commit()

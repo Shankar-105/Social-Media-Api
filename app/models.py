@@ -17,16 +17,22 @@ class SharedPost(Base):
 
     id = Column(Integer,primary_key=True)
     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"))
-    from_user_id = Column(Integer, ForeignKey("users.id"))
-    to_user_id = Column(Integer, ForeignKey("users.id"))
+    from_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    to_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     message = Column(String, nullable=True)  # Optional caption when sharing
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read=Column(Boolean,default=False,server_default="false")
     is_deleted_for_everyone = Column(Boolean, default=False, server_default='false')
+    reaction_cnt=Column(Integer,default=0,server_default="0")
     # Relationships
     post = relationship("Post",back_populates="shared_posts")
     from_user = relationship("User", foreign_keys=[from_user_id],back_populates="sent_posts")
     to_user = relationship("User", foreign_keys=[to_user_id],back_populates="received_posts")
+    reactions = relationship(
+        "SharedPostReaction",
+        backref="shared_post",
+        cascade="all, delete-orphan"
+    )
 
 # models.py
 class DeletedMessage(Base):
@@ -139,12 +145,22 @@ class User(Base):
       total_comments=relationship('Comments',backref='user')
       sent_posts = relationship("SharedPost", foreign_keys=[SharedPost.from_user_id],back_populates="from_user")
       received_posts = relationship("SharedPost", foreign_keys=[SharedPost.to_user_id],back_populates="to_user")
+      shared_post_reactions = relationship("SharedPostReaction", back_populates="user")
+class MessageReplies(Base):
+    __tablename__ = "message_replies"
+
+    reply_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
+    original_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
+
+    # Relationships (optional, for easier querying)
+    reply_msg = relationship("Message", foreign_keys=[reply_id])
+    original_msg = relationship("Message", foreign_keys=[original_id])
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True, index=True)
     content = Column(String, nullable=False)
-    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    receiver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    sender_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    receiver_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime(timezone=True),server_default=func.now())
     is_read = Column(Boolean,default=False)
     is_deleted_for_everyone = Column(Boolean, default=False, server_default='false')
@@ -152,6 +168,7 @@ class Message(Base):
     edited_at=Column(DateTime,nullable=True)
     read_at = Column(DateTime(timezone=True),nullable=True)
     reaction_cnt=Column(Integer,default=0,server_default="0")
+    is_reply_msg = Column(Boolean, default=False)
     # optional relationships for later maybe useful
     # when you do a Obj.sender where Obj is the object of class Message
     # it returns which user has sent that message and the same for Obj.recceiver
@@ -160,6 +177,12 @@ class Message(Base):
     # a list of all the messages that particular user has sent or received
     sender = relationship("User", foreign_keys=[sender_id])
     receiver = relationship("User", foreign_keys=[receiver_id])
+    # get the hecking list of all reactions on this message
+    reactions = relationship(
+        "MessageReaction",
+        backref="message",
+        cascade="all, delete-orphan"
+    )
     # get the list of all reacted users on this message
     reacted_users = relationship(
     "User",
@@ -168,14 +191,42 @@ class Message(Base):
     secondaryjoin="User.id == message_reactions.c.user_id",
     viewonly=True
     )
+    # if the Message obj is a reply message
+    # thrn we need to know the original message
+    # so that we can simply display in chat_history isntead of complex joins
+    replied_by = relationship(
+        "MessageReplies",
+        foreign_keys=[MessageReplies.original_id],
+        back_populates="original_msg",
+        cascade="all, delete-orphan"
+    )
+    # One message can reply to one
+    replies_to = relationship(
+        "MessageReplies",
+        foreign_keys=[MessageReplies.reply_id],
+        back_populates="reply_msg",
+        uselist=False  # important: only one parent
+    )
 # separate message reaction table to track who reacted to teh msg
 class MessageReaction(Base):
     __tablename__ = "message_reactions"
 
     id = Column(Integer,primary_key=True)
-    message_id = Column(Integer, ForeignKey("messages.id"),nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"),nullable=False)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     reaction = Column(String,nullable=False)  # ex: "❤️", "😂"
     # get the user reacted
     user = relationship("User", backref="message_reactions")
     __table_args__ = (UniqueConstraint('message_id', 'user_id', name='unique_user_reaction'),)
+
+class SharedPostReaction(Base):
+    __tablename__ = "shared_post_reactions"
+
+    id = Column(Integer, primary_key=True)
+    shared_post_id = Column(Integer, ForeignKey("shared_posts.id",ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    reaction = Column(String,nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="shared_post_reactions")
+    __table_args__ = (UniqueConstraint('shared_post_id', 'user_id', name='unique_shared_post_reaction'),)

@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-from chat_system import delete_msg,delete_shares,edit_msg,load_missed_msgs,msg_reaction
+from chat_system import delete_msg,delete_shares,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg
 import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
@@ -79,6 +79,16 @@ async def chat(
                      reaction=reaction_emoji
                 )
                 await msg_reaction.react(reactionPayLoad,reacted_by,db)
+            elif message_data.get("type") == "shared_post_reaction":
+                reacted_by = current_user.id
+                reaction_emoji = message_data.get("reaction")
+                shared_id = message_data.get("shared_post_id")
+
+                reaction_payload = schemas.ReactionPayload(
+                    message_id=shared_id,  # reuse field
+                    reaction=reaction_emoji
+                )
+                await share_reaction.react_to_shared_post(reaction_payload,reacted_by,db)
             elif message_data.get("type") == "edit_message":
                 try:
                         msg_id = int(message_data.get("msg_id"))
@@ -120,13 +130,24 @@ async def chat(
                  is_typing=message_data.get("is_typing")
                  receiver_id=message_data.get("receiver_id")
                  await manager.typing_status(type=type,receiver_id=receiver_id,typing_status=is_typing)
+
+            elif message_data.get("type") == "reply_message":
+                receiver_id=int(message_data.get("to"))
+                content=message_data.get("content")
+                reply_msg_id=int(message_data.get("reply_msg_id"))
+                payload=schemas.ReplyMessageSchema(
+                     to=receiver_id,
+                     reply_msg_id=reply_msg_id,
+                     content=content
+                )
+                await reply_msg.reply_msg(payload,current_user.id,db)
             # else then its a chat message
             else:
             # Save to DB (ALWAYS — even if offline)
                 msg = models.Message(
-                    content=message_data["content"],
+                    content=message_data.get("content"),
                     sender_id=user_id,
-                    receiver_id=message_data["to"]
+                    receiver_id=message_data.get("to")
                 )
                 db.add(msg)
                 db.commit()

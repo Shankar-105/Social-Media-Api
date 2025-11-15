@@ -67,14 +67,37 @@ async def edit_message(db:Session,message_id:int,new_content:str,sender_id:int,r
     # Update content and flags
     message.content = new_content
     message.is_edited = True
+    message.is_read=False
+    message.read_at=None
     message.edited_at = datetime.utcnow()
     db.commit()
     db.refresh(message)
+    print(message.is_read)
     payload = {
         "type":"edited_msg",
         "new_content":new_content,
         "message_id": message_id,
         "is_edited":True
     }
-    await manager.send_json_to_user(payload,recv_id)
+    if recv_id in manager.active_connections:
+                    try:
+                        # Try to send (if fails, it's a zombie)
+                        await manager.send_json_to_user(payload, 
+                            recv_id
+                        )
+                        print("Message sent via WebSocket")
+                        message.is_read = True
+                        message.read_at=datetime.utcnow()
+                        db.commit()
+                        print(f"Message {message.id} marked as READ")
+                    except Exception as e:
+                        # Send failed → zombie socket → remove
+                        print(f"Send failed: {e}")
+                        manager.disconnect(recv_id)
+                        # TODO: Later, send push notification here
+    else:
+            # Offline → don't send, just save in DB
+            print("Receiver offline — message saved in DB")
+            # TODO: Later, send push notification here
+        # Send response back to sender
     await manager.send_personal_message(payload,sender_id)

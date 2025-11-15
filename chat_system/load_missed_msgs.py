@@ -36,16 +36,32 @@ async def load_missed_content(
 
         missed_content=[]
         for m in missed_messages:
-            missed_content.append({
-                "type": "message",
-                "id": m.id,
-                "content": m.content,
-                "sender_id": m.sender_id,
-                "receiver_id":m.receiver_id,
-                "is_edited" : m.is_edited,
-                "timestamp": m.created_at.isoformat(),
-                "is_read": m.is_read
-            })
+            base_msg = {
+            "type": "message",
+            "id": m.id,
+            "content": m.content,
+            "sender_id": m.sender_id,
+            "receiver_id": m.receiver_id,
+            "timestamp": m.created_at.isoformat(),
+            "is_edited": m.is_edited,
+            "reaction_count": m.reaction_cnt,
+            "reactions": m.reactions,
+            "is_read": m.is_read
+        }
+            if m.is_reply_msg:
+                original_msg=m.replies_to.original_msg
+                if original_msg:
+                    base_msg.update({
+                        "is_reply": True,
+                        "reply_to": {
+                            "msg_id": original_msg.id,
+                            "content": original_msg.content,
+                            "sender_name": original_msg.sender.username if original_msg.sender else "Unknown"
+                        }
+                    })
+                else:
+                    base_msg["is_reply"] = False 
+            missed_content.append(base_msg)
 
         for s in missed_shares:
             missed_content.append({
@@ -59,6 +75,7 @@ async def load_missed_content(
                 "media_url": s.post.media_path,
                 "sender_nickname": s.from_user.nickname,
                 "caption_message": s.message,
+                "reactions": s.reactions,
                 "sent_at": s.created_at.isoformat(),
                 "is_read": s.is_read
             })
