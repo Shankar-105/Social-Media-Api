@@ -17,8 +17,8 @@ class SharedPost(Base):
 
     id = Column(Integer,primary_key=True)
     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"))
-    from_user_id = Column(Integer, ForeignKey("users.id"))
-    to_user_id = Column(Integer, ForeignKey("users.id"))
+    from_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    to_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     message = Column(String, nullable=True)  # Optional caption when sharing
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read=Column(Boolean,default=False,server_default="false")
@@ -159,8 +159,8 @@ class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True, index=True)
     content = Column(String, nullable=False)
-    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    receiver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    sender_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    receiver_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime(timezone=True),server_default=func.now())
     is_read = Column(Boolean,default=False)
     is_deleted_for_everyone = Column(Boolean, default=False, server_default='false')
@@ -212,8 +212,8 @@ class MessageReaction(Base):
     __tablename__ = "message_reactions"
 
     id = Column(Integer,primary_key=True)
-    message_id = Column(Integer, ForeignKey("messages.id"),nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"),nullable=False)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     reaction = Column(String,nullable=False)  # ex: "❤️", "😂"
     # get the user reacted
     user = relationship("User", backref="message_reactions")
@@ -223,8 +223,8 @@ class SharedPostReaction(Base):
     __tablename__ = "shared_post_reactions"
 
     id = Column(Integer, primary_key=True)
-    shared_post_id = Column(Integer, ForeignKey("shared_posts.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    shared_post_id = Column(Integer, ForeignKey("shared_posts.id",ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     reaction = Column(String,nullable=False)
 
     # Relationships
