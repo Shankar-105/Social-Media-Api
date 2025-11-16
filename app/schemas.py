@@ -188,3 +188,7 @@ class ReplyMessageSchema(BaseModel):
     to:int
     reply_msg_id:int
     content:str
+
+class MessageSchema(BaseModel):
+    to:int
+    content:str

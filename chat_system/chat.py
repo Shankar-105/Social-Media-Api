@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-from chat_system import delete_msg,delete_shares,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg
+from chat_system import delete_msg,delete_shares,dm,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg
 import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
@@ -150,50 +150,13 @@ async def chat(
                 await reply_msg.reply_msg(payload,current_user.id,db)
             # else then its a chat message
             else:
-            # Save to DB (ALWAYS — even if offline)
-                msg = models.Message(
-                    content=message_data.get("content"),
-                    sender_id=user_id,
-                    receiver_id=message_data.get("to")
-                )
-                db.add(msg)
-                db.commit()
-                db.refresh(msg)
-                print("added to db")
-                # Check if receiver is in active_connections
-                receiver_id = msg.receiver_id
-                if receiver_id in manager.active_connections:
-                    try:
-                        # Try to send (if fails, it's a zombie)
-                        await manager.send_to_user(
-                            f"User {user_id}: {msg.content}", 
-                            receiver_id
-                        )
-                        print("Message sent via WebSocket")
-                        msg.is_read = True
-                        msg.read_at=datetime.utcnow()
-                        db.commit()
-                        print(f"Message {msg.id} marked as READ")
-                    except Exception as e:
-                        # Send failed → zombie socket → remove
-                        print(f"Send failed: {e}")
-                        manager.disconnect(receiver_id)
-                        # TODO: Later, send push notification here
-                else:
-                    # Offline → don't send, just save in DB
-                    print("Receiver offline — message saved in DB")
-                    # TODO: Later, send push notification here
-                # Send response back to sender
-                response_data = {
-                    "id": msg.id,
-                    "content": msg.content,
-                    "sender_id": msg.sender_id,
-                    "receiver_id": msg.receiver_id,
-                    "timestamp": msg.created_at.isoformat(),
-                    "is_read":msg.is_read
-                }
-                await manager.send_personal_message(response_data, user_id)
-                print("Response sent to sender")
+                receiver_id=int(message_data.get("to"))
+                content=message_data.get("content")
+                payload=schemas.ReplyMessageSchema(
+                        to=receiver_id,
+                        content=content
+                    )
+                await dm.messageUser(payload,current_user.id,db)          
     except WebSocketDisconnect:
         # this is executed only when the client tries to disconnect
         # like in development clicking on the disconnect button in the
