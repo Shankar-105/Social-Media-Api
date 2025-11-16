@@ -44,7 +44,7 @@ async def edit_message(db:Session,message_id:int,new_content:str,sender_id:int,r
         models.Message.id == message_id,
         models.Message.sender_id == sender_id  # Only sender can edit
     ).first()
-
+    
     if not message:
         return None
     # Don't update if content is same

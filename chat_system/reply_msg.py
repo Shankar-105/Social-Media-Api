@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 from app.my_utils.socket_manager import manager
 from chat_system import delete_msg,delete_shares,edit_msg,load_missed_msgs,msg_reaction,share_reaction
 import json,asyncio
@@ -11,7 +12,25 @@ async def reply_msg(
     payload:schemas.ReplyMessageSchema,
     user_id:int,
     db:Session
-):  
+):    
+        # avioiding users from replying to a deleted message
+        # obviuosly its impossible to do so as soon after a user deletes a
+        # msg obviusly the option's like reply,edit,react or anyother stuff
+        # for that message will be removed by the frontend
+        # to avoid user replying to a deleted message 
+        # but an extra layer of security and a sample demo on how its done
+        subq=(
+        select(models.DeletedMessage.message_id)
+        .where(models.DeletedMessage.user_id == user_id)
+        .scalar_subquery()
+        )
+        original_msg = db.query(models.Message).filter(
+             models.Message.id == payload.reply_msg_id,
+             models.Message.is_deleted_for_everyone == False,
+             ~models.Message.id.in_(subq)).first()
+        if not original_msg:
+             print("cannot reply to a deleted message")
+             return
         # replying for a message is as same as sending a nrmal message
         # with few tweaks in it here we mark the mwessage as is_read True
         # so that this message will called as a reply msg

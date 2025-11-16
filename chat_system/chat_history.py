@@ -95,7 +95,7 @@ def get_chat_history(
                     }
                 })
         else:
-            base_msg["is_reply"] = False 
+            base_msg["is_reply"] = False
         chat_history.append(base_msg)
 
     for s in shared_posts:

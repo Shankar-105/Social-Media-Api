@@ -50,6 +50,10 @@ async def chat(
     try:
         while True:
             data = await websocket.receive_text()
+            # remove '\r' in the data if present
+            data=data.replace('\r','')
+            # see what you have received 'repr' represents the object
+            print("RAW:", repr(data))
             try:
                message_data = json.loads(data)
             except json.JSONDecodeError:
