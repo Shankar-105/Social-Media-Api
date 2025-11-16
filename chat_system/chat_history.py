@@ -81,7 +81,9 @@ def get_chat_history(
             "reactions": m.reactions,
             "is_read": m.is_read
         }
+        # check whether its a reply message or not
         if m.is_reply_msg:
+            # if so then
             original_msg=m.replies_to.original_msg
             if original_msg:
                 base_msg.update({
@@ -92,8 +94,8 @@ def get_chat_history(
                         "sender_name": original_msg.sender.username if original_msg.sender else "Unknown"
                     }
                 })
-            else:
-                base_msg["is_reply"] = False 
+        else:
+            base_msg["is_reply"] = False 
         chat_history.append(base_msg)
 
     for s in shared_posts:

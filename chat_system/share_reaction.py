@@ -6,7 +6,9 @@ from typing import List
 
 router = APIRouter(tags=['shared post reactions'])
 
-
+# same as the message_reaction but here the shares are
+# stored in the SharedPosts table so we query that insted of
+# the messages table
 @router.get("/shared/{shared_id}/reactions", response_model=List[schemas.ReactedUsers])
 def get_shared_post_reactions(
     shared_id: int,

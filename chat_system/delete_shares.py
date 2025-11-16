@@ -7,6 +7,9 @@ from datetime import datetime
 
 router=APIRouter(tags=['delete share'])
 
+# same as the message_reaction but here the shares are
+# stored in the SharedPosts table so we query that insted of
+# the messages table
 @router.post("/delete-share/for-me/{share_id}")
 def deleteForMe(
     share_id: int,
@@ -14,14 +17,13 @@ def deleteForMe(
     me: models.User = Depends(oauth2.getCurrentUser),
 ):
     share=db.query(models.SharedPost).filter(
-        models.SharedPost.id==share_id,
-        models.SharedPost.sender_id==me.id
+        models.SharedPost.id==share_id
     )
     if not share:
-        raise HTTPException(status_code=404,detail="Share not found")
+        return
     deleted_share=models.DeletedSharedPost(
         user_id=me.id,
-        post_id=share_id
+        shared_post_id=share_id
     )
     db.add(deleted_share)
     db.commit()

@@ -17,7 +17,7 @@ def get_message_info(
     # Only sender or receiver can see info
     if msg.sender_id != currentUser.id and msg.receiver_id != currentUser.id:
         raise HTTPException(403,"Not authorized")
-
+    # simple message information
     return {
         "message_id": msg.id,
         "delivered_at": msg.created_at.isoformat() + "Z",

@@ -70,6 +70,7 @@ async def chat(
                         sender_id=current_user.id,
                         receiver_id=recv_id
                     )
+            # if the message is of type a reaction to a message
             elif message_data.get("type") == "reaction":
                 reacted_by=current_user.id
                 reaction_emoji=message_data.get("reaction")
@@ -79,6 +80,7 @@ async def chat(
                      reaction=reaction_emoji
                 )
                 await msg_reaction.react(reactionPayLoad,reacted_by,db)
+            # if the message is of type reacting to a shared post
             elif message_data.get("type") == "shared_post_reaction":
                 reacted_by = current_user.id
                 reaction_emoji = message_data.get("reaction")
@@ -89,6 +91,7 @@ async def chat(
                     reaction=reaction_emoji
                 )
                 await share_reaction.react_to_shared_post(reaction_payload,reacted_by,db)
+            # if the message is of type edit
             elif message_data.get("type") == "edit_message":
                 try:
                         msg_id = int(message_data.get("msg_id"))
@@ -130,7 +133,7 @@ async def chat(
                  is_typing=message_data.get("is_typing")
                  receiver_id=message_data.get("receiver_id")
                  await manager.typing_status(type=type,receiver_id=receiver_id,typing_status=is_typing)
-
+            # if the message is of type reply
             elif message_data.get("type") == "reply_message":
                 receiver_id=int(message_data.get("to"))
                 content=message_data.get("content")

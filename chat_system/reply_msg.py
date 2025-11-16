@@ -11,7 +11,10 @@ async def reply_msg(
     payload:schemas.ReplyMessageSchema,
     user_id:int,
     db:Session
-):
+):  
+        # replying for a message is as same as sending a nrmal message
+        # with few tweaks in it here we mark the mwessage as is_read True
+        # so that this message will called as a reply msg
         msg = models.Message(
                         content=payload.content,
                         sender_id=user_id,
@@ -21,6 +24,10 @@ async def reply_msg(
         db.add(msg)
         db.commit()
         db.refresh(msg)
+        # we store the link reply_msg -> original_msg
+        # so that in future while quering the messages
+        # and knoiwing that a particular msg is a reply msg
+        # we need to which msg this is a reply 
         reply_link = models.MessageReplies(
             reply_id=msg.id,
             original_id=payload.reply_msg_id
@@ -39,6 +46,7 @@ async def reply_msg(
                 "sender_id": user_id,
                 "timestamp": msg.created_at.isoformat(),
                 "is_reply": True,
+                # original message
                 "reply_to": {
                     "msg_id": original_msg.id,
                     "content":  original_msg.content,
