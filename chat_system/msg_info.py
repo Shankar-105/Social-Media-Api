@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app import models,oauth2,db
+from app.my_utils.time_formatting import format_timestamp
 
 router = APIRouter(tags=['Message Info'])
 
@@ -20,7 +21,7 @@ def get_message_info(
     # simple message information
     return {
         "message_id": msg.id,
-        "delivered_at": msg.created_at.isoformat() + "Z",
-        "read_at": msg.read_at.isoformat() + "Z" if msg.read_at else None,
+        "delivered_at": format_timestamp(msg.created_at),
+        "read_at": format_timestamp(msg.read_at) if msg.read_at else None,
         "is_read": msg.is_read
     }

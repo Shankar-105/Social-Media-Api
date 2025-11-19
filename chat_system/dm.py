@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-import json,asyncio
+from app.my_utils.time_formatting import format_timestamp
 from datetime import datetime
                
 async def messageUser(
@@ -28,7 +28,7 @@ async def messageUser(
         "media_url":msg.media_url,
         "media_type":msg.media_type,
         "sender_id": user_id,
-        "timestamp": msg.created_at.isoformat(),
+        "timestamp": format_timestamp(msg.created_at),
         "is_reply": False,
         "is_reply_to_share": False,
     }

@@ -7,7 +7,8 @@ from app.models import SharedPost, Post, User
 from app.schemas import SharePostCreate,SharedPostResponse
 from app.oauth2 import getCurrentUser
 from app.my_utils.socket_manager import manager  # your WebSocket ConnectionManager
-import json
+from app.my_utils.time_formatting import format_timestamp
+
 
 router = APIRouter(tags=["Share Post"])
 
@@ -57,7 +58,7 @@ async def share_post(
         "owner_nickname": post.user.nickname,
         "sender_nickname": me.nickname,
         "message": payload.message or f"{me.nickname} shared a post with you!",
-        "sent_at": shared.created_at.isoformat(),
+        "sent_at": format_timestamp(shared.created_at),
     }
     if receiver.id in manager.active_connections:
         try:

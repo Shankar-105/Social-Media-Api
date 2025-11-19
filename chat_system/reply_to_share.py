@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.my_utils.socket_manager import manager
 from datetime import datetime
-
+from app.my_utils.time_formatting import format_timestamp
 async def reply_share(
     payload:schemas.ReplyToShareSchema,
     user_id:int,
@@ -49,7 +49,7 @@ async def reply_share(
         "id": reply_msg.id,
         "content": reply_msg.content,
         "sender_id": user_id,
-        "timestamp": reply_msg.created_at.isoformat(),
+        "timestamp": format_timestamp(reply_msg.created_at),
         "is_reply": True,
         "is_reply_to_share": True,
         "media_url":reply_msg.media_url,

@@ -142,10 +142,14 @@ async def chat(
                 receiver_id=int(message_data.get("to"))
                 content=message_data.get("content")
                 reply_msg_id=int(message_data.get("reply_msg_id"))
+                media_url=message_data.get("media_url")
+                media_type=message_data.get("media_type")
                 payload=schemas.ReplyMessageSchema(
                      to=receiver_id,
                      reply_msg_id=reply_msg_id,
-                     content=content
+                     content=content,
+                     media_type=media_type,
+                     media_url=media_url
                 )
                 await reply_msg.reply_msg(payload,current_user.id,db)
             # replying to a shared post
@@ -153,10 +157,14 @@ async def chat(
                 receiver_id=int(message_data.get("to"))
                 content=message_data.get("content")
                 shared_post_id=int(message_data.get("reply_share_id"))
+                media_url=message_data.get("media_url")
+                media_type=message_data.get("media_type")
                 payload=schemas.ReplyToShareSchema(
                      to=receiver_id,
                      shared_post_id=shared_post_id,
-                     content=content
+                     content=content,
+                     media_type=media_type,
+                     media_url=media_url
                 )
                 await reply_to_share.reply_share(payload,current_user.id,db)
             # else then its a chat message

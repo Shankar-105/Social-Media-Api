@@ -3,6 +3,7 @@ from app import schemas, models, oauth2,db,config
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
 from datetime import datetime
+from app.my_utils.time_formatting import format_timestamp
 
 async def load_missed_content(
     user_id: int,
@@ -44,7 +45,7 @@ async def load_missed_content(
                 "receiver_id": m.receiver_id,
                 "media_type":m.media_type if m.media_type != "false" else None,
                 "media_url":f"{config.settings.base_url}/chat-media{m.media_url}" if m.media_type != "false" else None,
-                "timestamp": m.created_at.isoformat(),
+                "timestamp": format_timestamp(m.created_at),
                 "is_edited": m.is_edited,
                 "reaction_count": m.reaction_cnt,
                 "reactions": m.reactions,
@@ -95,7 +96,7 @@ async def load_missed_content(
                 "sender_nickname": s.from_user.nickname,
                 "caption_message": s.message,
                 "reactions": s.reactions,
-                "sent_at": s.created_at.isoformat(),
+                "sent_at": format_timestamp(s.created_at),
                 "is_read": s.is_read
             })
         missed_content.sort(key=lambda x : x.get("timestamp") if "timestamp" in  x else x.get("sent_at"))

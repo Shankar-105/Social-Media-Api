@@ -1,4 +1,4 @@
-
+from app.my_utils.time_formatting import format_timestamp
 from fastapi import status,HTTPException,Depends,Body,APIRouter
 import app.schemas as sch
 from app import models,oauth2,config
@@ -77,7 +77,7 @@ def get_chat_history(
             "receiver_id":m.receiver_id,
             "media_type":m.media_type if m.media_type != "false" else None,
             "media_url":f"{config.settings.base_url}/chat-media{m.media_url}" if m.media_type != "false" else None,
-            "timestamp": m.created_at.isoformat(),
+            "timestamp": format_timestamp(m.created_at),
             "is_edited": m.is_edited,
             "reaction_count": m.reaction_cnt,
             "reactions": m.reactions,
@@ -122,13 +122,13 @@ def get_chat_history(
             "post_id": s.post.id,
             "sender_id": s.from_user_id,
             "receiver_id":s.to_user_id,
-            "title": (s.post.title or "")[:60],
+            "title":(s.post.title or "")[:60],
             "media_type": s.post.media_type,
             "media_url": s.post.media_path,
             "sender_nickname": s.from_user.nickname,
             "message": s.message,
             "reactions": s.reactions,
-            "sent_at": s.created_at.isoformat(),
+            "sent_at": format_timestamp(s.created_at),
             "is_read": s.is_read
         })
     chat_history.sort(key=lambda x : x.get("timestamp") if "timestamp" in  x else x.get("sent_at"))

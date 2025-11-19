@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.my_utils.socket_manager import manager
 from datetime import datetime
+from app.my_utils.time_formatting import format_timestamp
 
 
 async def reply_msg(
@@ -63,7 +64,7 @@ async def reply_msg(
                 "id": msg.id,
                 "content": msg.content,
                 "sender_id": user_id,
-                "timestamp": msg.created_at.isoformat(),
+                "timestamp": format_timestamp(msg.created_at),
                 "is_reply": True,
                 "is_reply_to_share": False,
                 "media_url":msg.media_url,
@@ -100,7 +101,7 @@ async def reply_msg(
                 "id": msg.id,
                 "content": msg.content,
                 "sender_id": user_id,
-                "timestamp": msg.created_at.isoformat(),
+                "timestamp":format_timestamp(msg.created_at),
                 "is_reply": True,
                 "is_reply_to_share": False,
                 "media_url":msg.media_url,
