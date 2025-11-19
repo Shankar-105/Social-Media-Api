@@ -25,8 +25,10 @@ async def reply_share(
         content=payload.content,
         sender_id=user_id,
         receiver_id=payload.to,
-        is_reply_msg=True,           # still a reply but
-        is_reply_to_share=True       # this is reply to a shared post
+        is_reply_msg=True,           # still a reply 
+        is_reply_to_share=True,
+        media_type=payload.media_type,
+        media_url=payload.media_url       # this is reply to a shared post
     )
     db.add(reply_msg)
     db.commit()
@@ -50,6 +52,8 @@ async def reply_share(
         "timestamp": reply_msg.created_at.isoformat(),
         "is_reply": True,
         "is_reply_to_share": True,
+        "media_url":reply_msg.media_url,
+        "media_type":reply_msg.media_type,
         "reply_to_share": {
             "shared_post_id": shared_post.id,
             "post_id": shared_post.post_id,

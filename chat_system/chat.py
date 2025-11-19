@@ -159,27 +159,18 @@ async def chat(
                      content=content
                 )
                 await reply_to_share.reply_share(payload,current_user.id,db)
-            # if its a media type message
-            elif message_data.get("type") == "media":
-                receiver_id=int(message_data.get("to"))
-                caption=message_data.get("caption")
-                media_url=message_data.get("media_url")
-                media_type=message_data.get("media_type")
-                payload=schemas.MediaTypeMessage(
-                     to=receiver_id,
-                     content=caption,
-                     media_type=media_type,
-                     media_url=media_url
-                )
-                await media_msg.sendMediaMsg(payload,current_user.id,db)
             # else then its a chat message
             else:
                 receiver_id=int(message_data.get("to"))
                 content=message_data.get("content")
+                media_url=message_data.get("media_url")
+                media_type=message_data.get("media_type")
                 payload=schemas.MessageSchema(
-                        to=receiver_id,
-                        content=content
-                    )
+                     to=receiver_id,
+                     content=content,
+                     media_type=media_type,
+                     media_url=media_url
+                )
                 await dm.messageUser(payload,current_user.id,db)         
     except WebSocketDisconnect:
         # this is executed only when the client tries to disconnect

@@ -73,6 +73,8 @@ async def load_missed_content(
                             "reply_to": {
                                 "msg_id": original_msg.id,
                                 "content": original_msg.content,
+                                "media_type":m.media_type if original_msg.media_type != "false" else None,
+                                "media_url":f"{config.settings.base_url}/chat-media{original_msg.media_url}" if original_msg.media_type != "false" else None,
                                 "sender_name": original_msg.sender.username if original_msg.sender else "Unknown"
                             }
                         })

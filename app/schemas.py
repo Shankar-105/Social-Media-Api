@@ -187,21 +187,21 @@ class ReactedUsers(BaseModel):
 class ReplyMessageSchema(BaseModel):
     to:int
     reply_msg_id:int
-    content:str
-
-class MessageSchema(BaseModel):
-    to:int
-    content:str
+    content:Optional[str]=None
+    media_url:Optional[str]=None
+    media_type:Optional[str]=None
 
 class ReplyToShareSchema(BaseModel):
-    content:str
-    shared_post_id: int   # the SharedPost.id they're replying to
+    shared_post_id: int
+    content:Optional[str]=None
+    media_url:Optional[str]=None
+    media_type:Optional[str]=None   # the SharedPost.id they're replying to
     to:int               # receiver user_id
     class Config:
         from_attributes = True
 
-class MediaTypeMessage(BaseModel):
+class MessageSchema(BaseModel):
     to:int
-    content:str
-    media_url:str
-    media_type:str
+    content:Optional[str]=None
+    media_url:Optional[str]=None
+    media_type:Optional[str]=None

@@ -11,23 +11,33 @@ async def messageUser(
     db:Session
 ):    
         msg = models.Message(
-                            content=payload.content,
-                            sender_id=user_id,
-                            receiver_id=payload.to
-                        )
+        content=payload.content,
+        sender_id=user_id,
+        receiver_id=payload.to,
+        media_type=payload.media_type,
+        media_url=payload.media_url
+    )
         db.add(msg)
         db.commit()
         db.refresh(msg)
         print("added to db")
+        
+        reply_payload = {
+        "id": msg.id,
+        "content": msg.content,
+        "media_url":msg.media_url,
+        "media_type":msg.media_type,
+        "sender_id": user_id,
+        "timestamp": msg.created_at.isoformat(),
+        "is_reply": False,
+        "is_reply_to_share": False,
+    }
         # Check if receiver is in active_connections
         receiver_id = msg.receiver_id
         if receiver_id in manager.active_connections:
             try:
                 # Try to send (if fails, it's a zombie)
-                await manager.send_to_user(
-                    f"User {user_id}: {msg.content}", 
-                    receiver_id
-                )
+                await manager.send_json_to_user(reply_payload,payload.to)
                 print("Message sent via WebSocket")
                 msg.is_read = True
                 msg.read_at=datetime.utcnow()
@@ -43,13 +53,5 @@ async def messageUser(
             print("Receiver offline — message saved in DB")
             # TODO: Later, send push notification here
         # Send response back to sender
-        response_data = {
-            "id": msg.id,
-            "content": msg.content,
-            "sender_id": msg.sender_id,
-            "receiver_id": msg.receiver_id,
-            "timestamp": msg.created_at.isoformat(),
-            "is_read":msg.is_read
-        }
-        await manager.send_personal_message(response_data, user_id)
+        await manager.send_personal_message(reply_payload,user_id)
         print("Response sent to sender")

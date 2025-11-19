@@ -105,6 +105,8 @@ def get_chat_history(
                         "is_reply": True,
                         "reply_to": {
                             "msg_id": original_msg.id,
+                            "media_type":m.media_type if original_msg.media_type != "false" else None,
+                            "media_url":f"{config.settings.base_url}/chat-media{original_msg.media_url}" if original_msg.media_type != "false" else None,
                             "content": original_msg.content,
                             "sender_name": original_msg.sender.username if original_msg.sender else "Unknown"
                         }

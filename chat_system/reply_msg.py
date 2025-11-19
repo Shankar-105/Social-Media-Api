@@ -36,7 +36,9 @@ async def reply_msg(
                         content=payload.content,
                         sender_id=user_id,
                         receiver_id=payload.to,
-                        is_reply_msg=True
+                        is_reply_msg=True,
+                        media_type=payload.media_type,
+                        media_url=payload.media_url
                     )
         db.add(msg)
         db.commit()
@@ -64,11 +66,15 @@ async def reply_msg(
                 "timestamp": msg.created_at.isoformat(),
                 "is_reply": True,
                 "is_reply_to_share": False,
+                "media_url":msg.media_url,
+                "media_type":msg.media_type,
                 # original message
                 "reply_to": {
                     "msg_id": original_msg.id,
                     "content":  original_msg.content,
-                    "sender_name": original_msg.sender.username
+                    "sender_name": original_msg.sender.username,
+                    "media_url":original_msg.media_url,
+                    "media_type":original_msg.media_type,
                 }
         }
                 # Try to send (if fails, it's a zombie)
@@ -97,10 +103,14 @@ async def reply_msg(
                 "timestamp": msg.created_at.isoformat(),
                 "is_reply": True,
                 "is_reply_to_share": False,
+                "media_url":msg.media_url,
+                "media_type":msg.media_type,
                 "reply_to": {
                     "msg_id": original_msg.id,
                     "content":  original_msg.content,
-                    "sender_name": original_msg.sender.username
+                    "sender_name": original_msg.sender.username,
+                    "media_url":original_msg.media_url,
+                    "media_type":original_msg.media_type,
                 }
         }
         await manager.send_personal_message(payload_to_user,user_id)
