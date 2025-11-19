@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-from chat_system import delete_msg,delete_shares,dm,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg,reply_to_share
+from chat_system import delete_msg,delete_shares,dm,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg,reply_to_share,media_msg
 import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
@@ -159,6 +159,19 @@ async def chat(
                      content=content
                 )
                 await reply_to_share.reply_share(payload,current_user.id,db)
+            # if its a media type message
+            elif message_data.get("type") == "media":
+                receiver_id=int(message_data.get("to"))
+                caption=message_data.get("caption")
+                media_url=message_data.get("media_url")
+                media_type=message_data.get("media_type")
+                payload=schemas.MediaTypeMessage(
+                     to=receiver_id,
+                     content=caption,
+                     media_type=media_type,
+                     media_url=media_url
+                )
+                await media_msg.sendMediaMsg(payload,current_user.id,db)
             # else then its a chat message
             else:
                 receiver_id=int(message_data.get("to"))

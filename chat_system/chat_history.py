@@ -1,7 +1,7 @@
 
 from fastapi import status,HTTPException,Depends,Body,APIRouter
 import app.schemas as sch
-from app import models,oauth2
+from app import models,oauth2,config
 from app.db import getDb
 from sqlalchemy.orm import Session
 from sqlalchemy import or_,and_,select
@@ -70,11 +70,13 @@ def get_chat_history(
     chat_history=[]
     for m in messages:
         base_msg = {
-            "type": "message",
+            "type":"message",
             "id": m.id,
             "content": m.content,
-            "sender_id": m.sender_id,
-            "receiver_id": m.receiver_id,
+            "sender_id":m.sender_id,
+            "receiver_id":m.receiver_id,
+            "media_type":m.media_type if m.media_type != "false" else None,
+            "media_url":f"{config.settings.base_url}/chat-media{m.media_url}" if m.media_type != "false" else None,
             "timestamp": m.created_at.isoformat(),
             "is_edited": m.is_edited,
             "reaction_count": m.reaction_cnt,

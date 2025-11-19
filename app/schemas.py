@@ -199,3 +199,9 @@ class ReplyToShareSchema(BaseModel):
     to:int               # receiver user_id
     class Config:
         from_attributes = True
+
+class MediaTypeMessage(BaseModel):
+    to:int
+    content:str
+    media_url:str
+    media_type:str

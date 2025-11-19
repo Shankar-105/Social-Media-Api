@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from app import models,config
 from app.db import engine
 from app.routes import changepassword, posts,users,auth,like,connect,comment,search,me,feed
-from chat_system import chat,chat_history,share,delete_msg,delete_shares,edit_msg,msg_info,msg_reaction,share_reaction
+from chat_system import chat,chat_history,share,delete_msg,delete_shares,edit_msg,msg_info,msg_reaction,share_reaction,media_msg
 from fastapi.middleware.cors import CORSMiddleware
 models.Base.metadata.create_all(bind=engine)
 
@@ -19,6 +19,8 @@ app = FastAPI()
 # wouldn"t be able to render that image and give a 404 error
 app.mount("/profilepics",StaticFiles(directory="profilepics"),name="profilepics")
 app.mount(f"/{config.settings.media_folder}",StaticFiles(directory=f"{config.settings.media_folder}"),name=f"{config.settings.media_folder}")
+app.mount("/chat-media",StaticFiles(directory="chat-media"),name="chat-media")
+
 # when the domain or the port changes
 # browser blocks the api-url(cross origin requests COR's)
 # so we need to do specify to allow all origins for now in dev scenario
@@ -48,3 +50,4 @@ app.include_router(edit_msg.router)
 app.include_router(msg_info.router)
 app.include_router(msg_reaction.router)
 app.include_router(share_reaction.router)
+app.include_router(media_msg.router)

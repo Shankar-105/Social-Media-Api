@@ -108,8 +108,8 @@ def updateUserInfo(username:str=Form(None),bio:str=Form(None),profile_picture:Up
         # this is the actual file path where the profile pics reside
         file_path=f"profilepics/{currentUser.username}_{profile_picture.filename}"
         # py methods to copy the argumented image in our file_path
-        with open(file_path, "wb") as buffer:
-           shutil.copyfileobj(profile_picture.file, buffer)
+        with open(file_path,"wb") as buffer:
+           shutil.copyfileobj(profile_picture.file,buffer)
         updates['profile_picture']=filename_toput_inDb
         # if any updates update them
     if updates:

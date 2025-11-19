@@ -166,6 +166,8 @@ class MessageReplies(Base):
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True, index=True)
+    media_url = Column(String,default=False,server_default="false")
+    media_type = Column(String,default=False,server_default="false")
     content = Column(String, nullable=False)
     sender_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     receiver_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)

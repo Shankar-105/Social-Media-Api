@@ -47,3 +47,6 @@ posts_media/
 chat_system/node_modules
 chat_system/package-lock.json
 chat_system/package.json
+
+# ignore chat media
+chat-media
