@@ -1,0 +1,72 @@
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
+from app import schemas, models, oauth2,db
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+from app.my_utils.socket_manager import manager
+from datetime import datetime
+
+async def reply_share(
+    payload:schemas.ReplyToShareSchema,
+    user_id:int,
+    db: Session
+):
+    # Optional: Validate that shared_post exists and belongs to this chat
+    shared_post = db.query(models.SharedPost).filter(
+        models.SharedPost.id == payload.shared_post_id
+        # or vice versa depending on who sent the share
+    ).first()
+
+    if not shared_post:
+        print("Invalid or inaccessible shared post")
+        return
+
+    # Create the reply message
+    reply_msg = models.Message(
+        content=payload.content,
+        sender_id=user_id,
+        receiver_id=payload.to,
+        is_reply_msg=True,           # still a reply but
+        is_reply_to_share=True       # this is reply to a shared post
+    )
+    db.add(reply_msg)
+    db.commit()
+    db.refresh(reply_msg)
+
+    # Link reply message -> shared post
+    reply_link = models.SharedPostReplies(
+        reply_msg_id=reply_msg.id,
+        shared_post_id=payload.shared_post_id
+    )
+    db.add(reply_link)
+    db.commit()
+
+    # Load original post details for context
+    original_post = db.query(models.Post).filter(models.Post.id == shared_post.post_id).first()
+
+    reply_payload = {
+        "id": reply_msg.id,
+        "content": reply_msg.content,
+        "sender_id": user_id,
+        "timestamp": reply_msg.created_at.isoformat(),
+        "is_reply": True,
+        "is_reply_to_share": True,
+        "reply_to_share": {
+            "shared_post_id": shared_post.id,
+            "post_id": shared_post.post_id,
+            "post_content": original_post.content[:100] + "..." if len(original_post.content) > 100 else original_post.content,
+            "post_owner": original_post.user.username,
+            "media_url": original_post.media_path  # if exists
+        }
+    }
+
+    # Send to receiver (same logic as before)
+    if payload.to in manager.active_connections:
+        try:
+            await manager.send_json_to_user(reply_payload,payload.to)
+            reply_msg.is_read = True
+            reply_msg.read_at = datetime.utcnow()
+            db.commit()
+        except:
+            manager.disconnect(payload.to)
+    # Send back to sender
+    await manager.send_personal_message(reply_payload,user_id)

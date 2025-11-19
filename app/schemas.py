@@ -192,3 +192,10 @@ class ReplyMessageSchema(BaseModel):
 class MessageSchema(BaseModel):
     to:int
     content:str
+
+class ReplyToShareSchema(BaseModel):
+    content:str
+    shared_post_id: int   # the SharedPost.id they're replying to
+    to:int               # receiver user_id
+    class Config:
+        from_attributes = True

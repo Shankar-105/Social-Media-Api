@@ -28,10 +28,10 @@
     </div>
 </div>
 <script>
-    const backendIP = window.location.hostname;
+    const WS_URL = "wss://mini-chat-sys.loca.lt";
     const userId = 15;
-    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE1LCJ1c2VyTmFtZSI6ImpheWFudGgiLCJleHBUaW1lIjoxNzYyMTUzMTA2fQ.mZmsx2p53kIahYJKxAipqgGAwYuIRlQ9NeWKE5zpOMs";
-    const ws = new WebSocket(`ws://${backendIP}:8000/chat/ws/${userId}?token=${token}`);
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE1LCJ1c2VyTmFtZSI6ImpheWFudGgiLCJleHBUaW1lIjoxNzYyMTcwNTk2fQ.H_hwF2Z99JTR_fQawqXraKkiePNQwS9OgcMMcRNgYYA";
+    const ws = new WebSocket(`${WS_URL}/chat/ws/${userId}?token=${token}`);
     const output = document.getElementById('output');
 
     ws.onopen = () => addSysMsg("Connected!");

@@ -12,12 +12,22 @@ connections = Table(
     Column('follower_id',Integer,ForeignKey('users.id',ondelete="CASCADE"),primary_key=True)
 )
 
+class SharedPostReplies(Base):
+    __tablename__ = "shared_post_replies"
+
+    reply_msg_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
+    shared_post_id = Column(Integer, ForeignKey("shared_posts.id", ondelete="CASCADE"), primary_key=True)
+
+    # Relationships
+    reply_message = relationship("Message", foreign_keys=[reply_msg_id],backref="replies_to_share")
+    shared_post = relationship("SharedPost", foreign_keys=[shared_post_id],backref="replies")
+
 class SharedPost(Base):
     __tablename__ = "shared_posts"
 
     id = Column(Integer,primary_key=True)
-    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"))
-    from_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    post_id = Column(Integer,ForeignKey("posts.id", ondelete="CASCADE"))
+    from_user_id = Column(Integer,ForeignKey("users.id", ondelete="CASCADE"))
     to_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     message = Column(String, nullable=True)  # Optional caption when sharing
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -148,10 +158,8 @@ class User(Base):
       shared_post_reactions = relationship("SharedPostReaction", back_populates="user")
 class MessageReplies(Base):
     __tablename__ = "message_replies"
-
     reply_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
     original_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
-
     # Relationships (optional, for easier querying)
     reply_msg = relationship("Message", foreign_keys=[reply_id])
     original_msg = relationship("Message", foreign_keys=[original_id])
@@ -168,7 +176,8 @@ class Message(Base):
     edited_at=Column(DateTime,nullable=True)
     read_at = Column(DateTime(timezone=True),nullable=True)
     reaction_cnt=Column(Integer,default=0,server_default="0")
-    is_reply_msg = Column(Boolean, default=False)
+    is_reply_msg = Column(Boolean,default=False)
+    is_reply_to_share = Column(Boolean,default=False,server_default="false")
     # optional relationships for later maybe useful
     # when you do a Obj.sender where Obj is the object of class Message
     # it returns which user has sent that message and the same for Obj.recceiver
@@ -206,6 +215,17 @@ class Message(Base):
         foreign_keys=[MessageReplies.reply_id],
         back_populates="reply_msg",
         uselist=False  # important: only one parent
+    )
+    # Add this inside class Message (in models.py)
+
+    # Direct link from a reply-message → the SharedPost it replies to
+    reply_to_shared_post = relationship(
+        "SharedPost",
+        secondary="shared_post_replies",
+        primaryjoin="Message.id == SharedPostReplies.reply_msg_id",
+        secondaryjoin="SharedPostReplies.shared_post_id == SharedPost.id",
+        uselist=False,           # One message replies to exactly one shared post
+        viewonly=True
     )
 # separate message reaction table to track who reacted to teh msg
 class MessageReaction(Base):

@@ -3,8 +3,6 @@ from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from app.my_utils.socket_manager import manager
-from chat_system import delete_msg,delete_shares,edit_msg,load_missed_msgs,msg_reaction,share_reaction
-import json,asyncio
 from datetime import datetime
 
 
@@ -32,7 +30,7 @@ async def reply_msg(
              print("cannot reply to a deleted message")
              return
         # replying for a message is as same as sending a nrmal message
-        # with few tweaks in it here we mark the mwessage as is_read True
+        # with few tweaks in it here we mark the mwessage as is_reply_msg True
         # so that this message will called as a reply msg
         msg = models.Message(
                         content=payload.content,
@@ -46,7 +44,7 @@ async def reply_msg(
         # we store the link reply_msg -> original_msg
         # so that in future while quering the messages
         # and knoiwing that a particular msg is a reply msg
-        # we need to which msg this is a reply 
+        # we need to know to which msg this is a reply 
         reply_link = models.MessageReplies(
             reply_id=msg.id,
             original_id=payload.reply_msg_id
@@ -65,6 +63,7 @@ async def reply_msg(
                 "sender_id": user_id,
                 "timestamp": msg.created_at.isoformat(),
                 "is_reply": True,
+                "is_reply_to_share": False,
                 # original message
                 "reply_to": {
                     "msg_id": original_msg.id,
@@ -97,6 +96,7 @@ async def reply_msg(
                 "sender_id": user_id,
                 "timestamp": msg.created_at.isoformat(),
                 "is_reply": True,
+                "is_reply_to_share": False,
                 "reply_to": {
                     "msg_id": original_msg.id,
                     "content":  original_msg.content,

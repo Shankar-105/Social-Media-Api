@@ -37,30 +37,45 @@ async def load_missed_content(
         missed_content=[]
         for m in missed_messages:
             base_msg = {
-            "type": "message",
-            "id": m.id,
-            "content": m.content,
-            "sender_id": m.sender_id,
-            "receiver_id": m.receiver_id,
-            "timestamp": m.created_at.isoformat(),
-            "is_edited": m.is_edited,
-            "reaction_count": m.reaction_cnt,
-            "reactions": m.reactions,
-            "is_read": m.is_read
-        }
+                "type": "message",
+                "id": m.id,
+                "content": m.content,
+                "sender_id": m.sender_id,
+                "receiver_id": m.receiver_id,
+                "timestamp": m.created_at.isoformat(),
+                "is_edited": m.is_edited,
+                "reaction_count": m.reaction_cnt,
+                "reactions": m.reactions,
+                "is_read": m.is_read
+            }
+            # check whether its a reply message or not
             if m.is_reply_msg:
-                original_msg=m.replies_to.original_msg
-                if original_msg:
-                    base_msg.update({
-                        "is_reply": True,
-                        "reply_to": {
-                            "msg_id": original_msg.id,
-                            "content": original_msg.content,
-                            "sender_name": original_msg.sender.username if original_msg.sender else "Unknown"
-                        }
-                    })
+                # if so then check if its just a reply to a messgage or a post
+                if m.is_reply_to_share:
+                    shared_post=m.reply_to_shared_post
+                    if shared_post:
+                        base_msg.update({
+                            "is_reply":True,
+                            "is_reply_to_share": True,
+                            "reply_to": {
+                                "share_id":shared_post.id,
+                                "content":shared_post.post.media_path,
+                                "sender_name":shared_post.from_user.username if shared_post.from_user else "Unknown"
+                            }
+                        })
                 else:
-                    base_msg["is_reply"] = False 
+                    original_msg=m.replies_to.original_msg
+                    if original_msg:
+                        base_msg.update({
+                            "is_reply": True,
+                            "reply_to": {
+                                "msg_id": original_msg.id,
+                                "content": original_msg.content,
+                                "sender_name": original_msg.sender.username if original_msg.sender else "Unknown"
+                            }
+                        })
+            else:
+                base_msg["is_reply"] = False
             missed_content.append(base_msg)
 
         for s in missed_shares:

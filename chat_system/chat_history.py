@@ -83,17 +83,30 @@ def get_chat_history(
         }
         # check whether its a reply message or not
         if m.is_reply_msg:
-            # if so then
-            original_msg=m.replies_to.original_msg
-            if original_msg:
-                base_msg.update({
-                    "is_reply": True,
-                    "reply_to": {
-                        "msg_id": original_msg.id,
-                        "content": original_msg.content,
-                        "sender_name": original_msg.sender.username if original_msg.sender else "Unknown"
-                    }
-                })
+            # if so then check if its just a reply to a messgage or a post
+            if m.is_reply_to_share:
+                shared_post=m.reply_to_shared_post
+                if shared_post:
+                    base_msg.update({
+                        "is_reply":True,
+                        "is_reply_to_share": True,
+                        "reply_to": {
+                            "share_id":shared_post.id,
+                            "content":shared_post.post.media_path,
+                            "sender_name":shared_post.from_user.username if shared_post.from_user else "Unknown"
+                        }
+                    })
+            else:
+                original_msg=m.replies_to.original_msg
+                if original_msg:
+                    base_msg.update({
+                        "is_reply": True,
+                        "reply_to": {
+                            "msg_id": original_msg.id,
+                            "content": original_msg.content,
+                            "sender_name": original_msg.sender.username if original_msg.sender else "Unknown"
+                        }
+                    })
         else:
             base_msg["is_reply"] = False
         chat_history.append(base_msg)
@@ -115,6 +128,4 @@ def get_chat_history(
             "is_read": s.is_read
         })
     chat_history.sort(key=lambda x : x.get("timestamp") if "timestamp" in  x else x.get("sent_at"))
-    for x in chat_history:
-        print(x.get("timestamp") if "timestamp" in  x else x.get("sent_at"))
     return chat_history  # oldest first

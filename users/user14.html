@@ -28,13 +28,13 @@
     </div>
 </div>
 <script>
-    const backendIP = window.location.hostname;
+    const WS_URL = "wss://mini-chat-sys.loca.lt";
     const userId = 14;
-    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE0LCJ1c2VyTmFtZSI6Inlhc2giLCJleHBUaW1lIjoxNzYyMTAzNTkzfQ.EddX7B6jf2HFE44_J-tQsjOI4n5AGaOBEKf_1fEbW1M";
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjE0LCJ1c2VyTmFtZSI6Inlhc2giLCJleHBUaW1lIjoxNzYyMjYyNzg3fQ.qq98e5ZF9va6VYx_HxCNf7fiYZDSiEdMbkXN7XmTQ_8";
     // whenever user opens the app this url in the args of 'new WebSocket' is called
     // and a WebSocket obj is created if the token authincation is successfull
     // and now this opens the live tunnel between the sender and the server
-    const ws = new WebSocket(`ws://${backendIP}:8000/chat/ws/${userId}?token=${token}`);
+    const ws = new WebSocket(`${WS_URL}/chat/ws/${userId}?token=${token}`);
     const output = document.getElementById('output');
     // .onopen() is the method which is hit when ever the connection is succesfull
     ws.onopen = () => addSysMsg("Connected!");

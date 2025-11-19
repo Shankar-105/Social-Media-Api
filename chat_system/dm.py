@@ -11,9 +11,9 @@ async def messageUser(
     db:Session
 ):    
         msg = models.Message(
-                            content=payload.get("content"),
+                            content=payload.content,
                             sender_id=user_id,
-                            receiver_id=payload.get("to")
+                            receiver_id=payload.to
                         )
         db.add(msg)
         db.commit()

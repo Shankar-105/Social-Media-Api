@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-from chat_system import delete_msg,delete_shares,dm,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg
+from chat_system import delete_msg,delete_shares,dm,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg,reply_to_share
 import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
@@ -148,15 +148,26 @@ async def chat(
                      content=content
                 )
                 await reply_msg.reply_msg(payload,current_user.id,db)
+            # replying to a shared post
+            elif message_data.get("type") == "reply_to_share":
+                receiver_id=int(message_data.get("to"))
+                content=message_data.get("content")
+                shared_post_id=int(message_data.get("reply_share_id"))
+                payload=schemas.ReplyToShareSchema(
+                     to=receiver_id,
+                     shared_post_id=shared_post_id,
+                     content=content
+                )
+                await reply_to_share.reply_share(payload,current_user.id,db)
             # else then its a chat message
             else:
                 receiver_id=int(message_data.get("to"))
                 content=message_data.get("content")
-                payload=schemas.ReplyMessageSchema(
+                payload=schemas.MessageSchema(
                         to=receiver_id,
                         content=content
                     )
-                await dm.messageUser(payload,current_user.id,db)          
+                await dm.messageUser(payload,current_user.id,db)         
     except WebSocketDisconnect:
         # this is executed only when the client tries to disconnect
         # like in development clicking on the disconnect button in the
