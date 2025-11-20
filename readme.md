@@ -113,10 +113,16 @@ You need to install the C++ Build Tools from Visual Studio:
 ---
 
 ### 4. Database Integration & Driver
+- Now your done with getting into the venv and installing all the dependencies required and now it's time for the db integration.
+- You’ll need a database installed inorder to store the data and the api to work. (Like PostgreSQL , MySql etc).
 
-- You’ll need your database running inorder to store the data (PostgreSQL recommended).
-- **Link your database credentials in the <kbd>app/db.py</kbd> and <kbd>.env</kbd>!**
-- If you use PostgreSQL, the required driver (`psycopg2-binary`) is already included above.
+- you need to know your **Host Name/address ,Port (the database port like 5432 for postgresql) , the password and the username**
+- after your clear with all these things create a database in it for example `social_media`
+
+- **Link your database credentials in the <kbd>app/db.py</kbd> and <kbd>.env</kbd>! (mentioned below)**
+
+- Sqlalchemy supports many databases but for each database it requires it's own specific driver to be installed with it. If you use PostgreSQL, the required driver (`psycopg2-binary`) is already included and installed above in the requirements.txt.
+
 - **Other databases?**  
     - **MySQL:**  
       ```bash
@@ -130,15 +136,15 @@ You need to install the C++ Build Tools from Visual Studio:
 
 ### 5. Environment Variables Setup (.env)
 
-> Copy `.env.example` to `.env` and fill in values.  
+> Copy this to your `.env` and fill in values.  
 > **Required keys:** (match your local DB settings)
 
 ```ini
-DATABASE_HOST="localhost"
-DATABASE_PORT=5432
+DATABASE_HOST="your-hostname"
+DATABASE_PORT=5432 # postgres port
 DATABASE_PASSWORD="your-db-password"
-DATABASE_USER="postgres"
-DATABASE_NAME="fastApi"
+DATABASE_USER="your-db-username"
+DATABASE_NAME="your-database-name" # like the social_media i have suggested above
 
 SECRET_KEY="your-secret-key"
 ALGORITHM="HS256"
