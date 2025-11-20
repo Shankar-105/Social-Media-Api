@@ -72,3 +72,123 @@ Supports file uploads, instant messaging via WebSockets, and everything you need
     - Connection management (ping-pong, zombie detection)
     - All messages synced and stored
 ---
+## 🚦 Getting Started — Be Up in 5 Minutes!
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Shankar-105/Social-Media-Api.git
+cd Social-Media-Api
+```
+
+### 2. Create & Activate a Virtual Environment
+
+| OS      | Command                                                    |
+|---------|------------------------------------------------------------|
+| **Windows**     | `python -m venv venv && venv\Scripts\activate`    |
+| **macOS/Linux** | `python3 -m venv venv && source venv/bin/activate`|
+
+### 3. Install All Python Dependencies
+
+> 💡 **Now it's time to install the dependencies for the api need to work. To install all the depedencies with one command you will already have the requirements.txt from the clone , So just do!**
+
+```bash
+pip install -r requirements.txt
+```
+> **_And all the required dependencies will be installed all at a once_**
+---
+
+> ⚠️ **Alert for the Windows Users:**  
+If you encounter a build error with `psycopg2-binary` (**the postgres driver**) like:  
+`error: Microsoft Visual C++ 14.0 or greater is required...`  
+You need to install the C++ Build Tools from Visual Studio:
+
+- Download & install the [Build Tools for Visual Studio](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+- Install the “C++ build tools” workload (default options are fine , Search the internet if still confused).
+- After install, in a **new terminal**, run:
+    ```bash
+    python -m pip install --upgrade pip setuptools wheel
+    python -m pip install -r requirements.txt
+    ```
+---
+
+### 4. Database Integration & Driver
+
+- You’ll need your database running inorder to store the data (PostgreSQL recommended).
+- **Link your database credentials in the <kbd>app/db.py</kbd> and <kbd>.env</kbd>!**
+- If you use PostgreSQL, the required driver (`psycopg2-binary`) is already included above.
+- **Other databases?**  
+    - **MySQL:**  
+      ```bash
+      pip install pymysql
+      ```
+    - **SQLite:**  
+      _Driver built-in, just change connection string accordingly._
+    - Make sure to update your <kbd>app/db.py</kbd> to point at the correct DB.
+
+---
+
+### 5. Environment Variables Setup (.env)
+
+> Copy `.env.example` to `.env` and fill in values.  
+> **Required keys:** (match your local DB settings)
+
+```ini
+DATABASE_HOST="localhost"
+DATABASE_PORT=5432
+DATABASE_PASSWORD="your-db-password"
+DATABASE_USER="postgres"
+DATABASE_NAME="fastApi"
+
+SECRET_KEY="your-secret-key"
+ALGORITHM="HS256"
+ACCESS_TOKEN_EXPIRE_TIME=30
+
+EMAIL_USERNAME=your_email@gmail.com
+EMAIL_PASSWORD=your_app_specific_email_password
+EMAIL_FROM=your_email@gmail.com
+EMAIL_PORT=587
+EMAIL_SERVER=smtp.gmail.com
+
+BASE_URL="http://127.0.0.1:8000"
+MEDIA_FOLDER="posts_media"
+MAX_EDIT_TIME=15
+```
+_Note: These are auto-imported via Pydantic Settings and used in config/db throughout the backend._
+
+---
+
+### 6. Prepare Local Folders
+
+```bash
+mkdir profilepics posts_media chat-media
+```
+
+> These folders auto-store profile pictures, post media, and chat files locally. They'll be auto-created if missing.
+
+---
+
+### 7. Run the Server!
+
+```bash
+uvicorn app.main:app --reload
+```
+Server will be live at [http://127.0.0.1:8000](http://127.0.0.1:8000)
+
+---
+### 8. (Recommended) Database Migration Setup  
+**Use Alembic for SQL migrations.**
+
+```bash
+pip install alembic
+alembic init alembic
+```
+Edit `alembic.ini` and `alembic/env.py` to match your database configuration (refer internet for easy walkthroughs if beginner).
+
+- Generate a migration:
+    ```bash
+    alembic revision --autogenerate -m "Initial migration"
+    alembic upgrade head
+    ```
+
+---
