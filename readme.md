@@ -198,3 +198,23 @@ Edit `alembic.ini` and `alembic/env.py` to match your database configuration (re
     ```
 
 ---
+## 🤝 Contributing
+ open to all contributors 
+- **Clone the repo**
+- Create a new branch (`git checkout -b feature-xyz`)
+- Make your changes and commit with clear messages
+- Open a Pull Request (PR)
+- I will review & merge if the changes make sense.
+- Want to add a frontend? **Sponsor a frontend integration!**  
+  Just reach out or open a PR for any frontend you build (React, Vue, whatever you love).
+
+If you have questions, need guidance, or want to contribute something unique, just open an issue or reach out using the gmail or the linkedIn (checkout the profile for links)!
+
+---
+
+## 👨‍💻 Built by Bhavani Shankar  
+**ANITS College, Vizag**
+
+> Thanks for checking out the project.
+> If you use this API , let me know—would love to hear your story! 🚀 🎓
+---
