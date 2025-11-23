@@ -3,6 +3,8 @@ services: # all the current services
     build: . # builds the 'Dockerfile' and gets it from the root directory
     ports:
       - "8000:8000"  # mapping localhost:8000 to container's 8000
+    depends_on:
+      - db  # Starts DB first
     volumes:
     # for dev purposes whenever the code is changed either
     # while the containers are running or when the containers are stopped 
@@ -13,7 +15,6 @@ services: # all the current services
       - .:/code 
     environment:
       - DATABASE_HOST=db  # here inside the containers the api and the db communincation is via this 'db'
-      - db  # Starts DB first
     restart: unless-stopped  # Auto-restart if it crashes no compose up's needed again and again
 
   db:
