@@ -20,7 +20,14 @@ mv .env.example .env
 > Why: app reads configuration from `.env` so it must be `.env`. Also Renaming the `.env.example` to `.env` ensures sensitive keys (DB password,email creds,JWT secret) are loaded locally and not committed (via .gitignore) when you later commit/push your changes of this clone.
 
 ---
+### Prepare Local Folders
 
+```bash
+mkdir profilepics posts_media chat-media
+```
+
+> These folders auto-store profile pictures, post media, and chat files locally. They'll be auto-created if missing.
+---
 ### **⚙️ Docker Setup & Running the Project**
 This project uses Docker Compose for an easy multi-service setup (API + Postgres). Containers isolate services and volumes persist your DB data while development.
 
