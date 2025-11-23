@@ -10,11 +10,9 @@ Supports file uploads, instant messaging via WebSockets, and everything you need
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.119+-green?logo=fastapi)
 ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0+-yellow?logo=sqlalchemy)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue?logo=postgresql)
-![WebSockets](https://img.shields.io/badge/WebSockets-Realtime-blue?logo=websocket)
-![Authentication](https://img.shields.io/badge/Auth-JWT-orange?logo=jsonwebtokens)
-![License](https://img.shields.io/badge/License-MIT-purple)
-
----
+![WebSockets Badge](https://img.shields.io/badge/WebSockets-101010?style=for-the-badge&logo=socket.io&logoColor=white)
+![JWT Badge](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=JSON%20web%20tokens&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=plastic&logo=docker&logoColor=white)
 
 ## 🌟 Features — What’s Inside?
 
@@ -74,7 +72,7 @@ Supports file uploads, instant messaging via WebSockets, and everything you need
 ---
 ## 🚦 Getting Started — Simplified with Docker!
 
-_Want to Run the Api or wanna test or make your own changes to the code here's [`SET-UP`](https://github.com/Shankar-105/Social-Media-Api/main/SETUP.md) how you can 
+_Want to Run the Api or wanna test or make your own changes to the code here's [`SET-UP`](https://github.com/Shankar-105/Social-Media-Api/blob/main/SETUP.md) how you can 
 clone the repositroy and set up the environment._
 
 ---
