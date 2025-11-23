@@ -1,0 +1,31 @@
+services: # all the current services
+  api:
+    build: . # builds the 'Dockerfile' and gets it from the root directory
+    ports:
+      - "8000:8000"  # mapping localhost:8000 to container's 8000
+    volumes:
+    # for dev purposes whenever the code is changed either
+    # while the containers are running or when the containers are stopped 
+    # it reflects any change in code instantly
+    # it only doesnt reflect new 'pip installs' or chanegs in the 'Dockerfile' and these kind of changes
+    # for these you need to do docker compose up --build which just builds the new changes which 
+    # arent tracked by this bind mount below
+      - .:/code 
+    environment:
+      - DATABASE_HOST=db  # here inside the containers the api and the db communincation is via this 'db'
+      - db  # Starts DB first
+    restart: unless-stopped  # Auto-restart if it crashes no compose up's needed again and again
+
+  db:
+    image: postgres:16-alpine # get the official postgres image from dockerhub
+    environment:
+      - POSTGRES_USER=postgres  
+      - POSTGRES_PASSWORD=iota143  
+      - POSTGRES_DB=fastApi  
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # volumes persist data rather then erasing data on every restart
+    ports:
+      - "5432:5432"  
+
+volumes:
+  postgres_data:  # named volume for DB data—survives restarts

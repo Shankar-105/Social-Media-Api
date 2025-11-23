@@ -20,9 +20,6 @@ venv.bak/
 
 # Environment variable files
 .env
-.env.*
-*.env
-
 
 # Logs and runtime files
 *.log
@@ -47,6 +44,9 @@ posts_media/
 chat_system/node_modules
 chat_system/package-lock.json
 chat_system/package.json
+
+# ignore my lcoal sql files
+*.sql
 
 # ignore chat media
 chat-media

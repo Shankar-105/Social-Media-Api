@@ -1,0 +1,20 @@
+# .dockerignore 
+# ignore the .env to be pushed inside the image
+.env
+*.env
+__pycache__
+*.pyc
+# dont allow any git or alembic folders into the image
+.git
+.gitignore
+alembic/versions/*.pyc
+# ignore the local folders whcih contains my images,other stuff
+posts_media/*
+chat-media/*
+profilepics/*
+# ignore my lcoal sql files
+*.sql
+# ignore the venv
+venv
+# license
+license

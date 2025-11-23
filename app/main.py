@@ -52,3 +52,9 @@ app.include_router(msg_reaction.router)
 app.include_router(share_reaction.router)
 app.include_router(media_msg.router)
 app.include_router(clear_chat.router)
+
+@app.get("/health",status_code=200)
+def hello():
+    return {
+        "message":"fine"
+    }
