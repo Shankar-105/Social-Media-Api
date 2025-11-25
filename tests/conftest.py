@@ -1,7 +1,14 @@
 import pytest
+import os,sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
+
+# pytest doesnt see anything except the tests sub-folder so we need to add the
+# project path to pythonpath so that now pytest can see all the project fplders
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# after setting the PYTHONPATH then import anyother foldes in project dir
 from app.main import app
 from app.models import Base
 from app.db import getDb
@@ -24,9 +31,7 @@ def setup_test_db():
     # then create all tables
     Base.metadata.create_all(bind=test_engine)
     yield
-    # delete after done
-    Base.metadata.drop_all(bind=test_engine)
-
+    
 def override_getDb():
     db = TestingSessionLocal()
     try:
