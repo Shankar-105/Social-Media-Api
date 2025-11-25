@@ -61,7 +61,7 @@ def create_test_user(client):
 
 # preserve the token!
 @pytest.fixture(scope="session")
-def get_token(client, create_test_user):
+def get_token(client,create_test_user):
     data = {
         "username": create_test_user["username"],
         "password": create_test_user["password"]
