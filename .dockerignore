@@ -18,3 +18,5 @@ profilepics/*
 venv
 # license
 license
+# ignore the testing data 
+seed.py

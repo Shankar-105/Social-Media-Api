@@ -6,6 +6,8 @@ from app.db import engine
 from app.routes import changepassword, posts,users,auth,like,connect,comment,search,me,feed
 from chat_system import chat,chat_history,share,delete_msg,delete_shares,edit_msg,msg_info,msg_reaction,share_reaction,media_msg,clear_chat
 from fastapi.middleware.cors import CORSMiddleware
+# creates tables from models.py if the tables doesnt exist
+
 models.Base.metadata.create_all(bind=engine)
 
 # fastapi instance

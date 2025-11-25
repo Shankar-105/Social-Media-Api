@@ -50,3 +50,9 @@ chat_system/package.json
 
 # ignore chat media
 chat-media
+
+# ignore the testing data 
+seed.py
+
+# ignore the  pytests cache
+.pytest_cache

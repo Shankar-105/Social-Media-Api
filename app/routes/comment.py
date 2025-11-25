@@ -43,7 +43,7 @@ def editComment(comment_id:int,editInfo:sch.EditCommentModel=Body(...),db:Sessio
     db.refresh(commentToBeEdited)
     return {"message":f"successfully edited comment {comment_id} of user {currentUser.username}"}
 
-@router.get("/comments-on/{post_id}")  
+@router.get("/comments-on/{post_id}")
 def getAllPosts(post_id:int,
     limit:int=Query(10, ge=1, le=100),
     offset: int = Query(0,ge=0),
