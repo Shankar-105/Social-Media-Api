@@ -2,7 +2,7 @@ import pytest
 import os,sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient # fastapi.testclient needs starlette.testclient which again needs httpx module
 
 # pytest doesnt see anything except the tests sub-folder so we need to add the
 # project path to pythonpath so that now pytest can see all the project fplders
@@ -31,7 +31,7 @@ def setup_test_db():
     # then create all tables
     Base.metadata.create_all(bind=test_engine)
     yield
-    
+
 def override_getDb():
     db = TestingSessionLocal()
     try:
