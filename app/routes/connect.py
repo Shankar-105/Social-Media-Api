@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 router=APIRouter(tags=['connections'])
 
-@router.post("/follow/{user_id}",status_code=status.HTTP_201_CREATED)
+@router.post("/follow/{user_id}",status_code=status.HTTP_201_CREATED, response_model=sch.FollowResponse)
 def follow(user_id:int,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     userToFollow=db.query(models.User).filter(models.User.id==user_id).first()
     if not userToFollow:
@@ -25,9 +25,9 @@ def follow(user_id:int,db:Session=Depends(getDb),currentUser:models.User=Depends
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to follow user")
-    return {"message":f"followed user {userToFollow.username}"}
+    return sch.FollowResponse(message=f"Followed user {userToFollow.username}", following_count=currentUser.following_cnt)
     
-@router.delete("/unfollow/{user_id}",status_code=status.HTTP_201_CREATED)
+@router.delete("/unfollow/{user_id}",status_code=status.HTTP_200_OK, response_model=sch.FollowResponse)
 def unfollow(user_id:int,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     userToUnFollow=db.query(models.User).filter(models.User.id==user_id).first()
     if not userToUnFollow:
@@ -41,5 +41,5 @@ def unfollow(user_id:int,db:Session=Depends(getDb),currentUser:models.User=Depen
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to follow user")
-    return {"message":f"UnFollowed user {userToUnFollow.username}"}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to unfollow user")
+    return sch.FollowResponse(message=f"Unfollowed user {userToUnFollow.username}", following_count=currentUser.following_cnt)

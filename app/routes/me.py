@@ -12,26 +12,23 @@ router=APIRouter(
     tags=['me']
 )
 
-@router.get("/me/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfile)
+@router.get("/me/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfileResponse)
 def myProfile(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    currentUserProfile=sch.UserProfile(
-        profilePicture=currentUser.profile_picture,
+    return sch.UserProfileResponse(
+        id=currentUser.id,
         username=currentUser.username,
         nickname=currentUser.nickname,
-        bio=currentUser.bio,
-        posts=len(currentUser.posts),
-        followers=currentUser.followers_cnt,
-        following=currentUser.following_cnt,
+        bio=currentUser.bio or "",
+        profile_picture=currentUser.profile_picture,
+        posts_count=len(currentUser.posts),
+        followers_count=currentUser.followers_cnt,
+        following_count=currentUser.following_cnt,
+        created_at=currentUser.created_at
     )
-    if not currentUserProfile.bio:
-        currentUserProfile.bio=""
-    if not currentUserProfile.profilePicture:
-        currentUserProfile.profilePicture=""
-    return currentUserProfile
 
-@router.get("/me/profile/pic",status_code=status.HTTP_200_OK)
+@router.get("/me/profile/pic",status_code=status.HTTP_200_OK, response_model=sch.MediaInfo)
 def myProfilePicture(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    # get the curretn users profile pic
+    # get the current users profile pic
     profilePicturePath = currentUser.profile_picture
     # if he doesnt have a porfile pic return 404
     if not profilePicturePath:
@@ -40,24 +37,25 @@ def myProfilePicture(db:Session=Depends(db.getDb),currentUser:models.User=Depend
     # optional check
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Image not found")
-    # return a FileResponse class response to view it directly
-    # as in commit hash <96bd0a3> or else return the link and you can
-    # view it in the broswer by entering the output url
-    return sch.UserProfileDisplay.displayUserProfilePic(currentUser)
-@router.delete("/me/profilepic/delete",status_code=status.HTTP_200_OK)
+    # return proper schema with full URL
+    return sch.MediaInfo(
+        url=f"{os.getenv('BASE_URL', 'http://localhost:8000')}/profilepics/{profilePicturePath}",
+        type="image"
+    )
+@router.delete("/me/profilepic/delete",status_code=status.HTTP_200_OK, response_model=sch.SuccessResponse)
 def removeProfilePicture(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     profilePic=currentUser.profile_picture
     if not profilePic:
-        return HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="no profile pic to remove")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="No profile picture to remove")
     file_path=f"profilepics/{profilePic}"
     if os.path.exists(file_path):
         os.remove(file_path)
     currentUser.profile_picture=None
     db.commit()
-    return {"message":"removed profile pic"}
+    return sch.SuccessResponse(message="Profile picture removed successfully")
 
 # retrives all posts using sqlAlchemy
-@router.get("/me/posts")  
+@router.get("/me/posts", response_model=sch.PostListResponse)  
 def getAllPosts(limit:int=Query(10, ge=1, le=100),
     offset: int = Query(0,ge=0),
     db:Session=Depends(db.getDb),
@@ -68,20 +66,40 @@ def getAllPosts(limit:int=Query(10, ge=1, le=100),
     # only fetch the first 'limit' posts after skipping the first 'offset' posts
     # and order them by the latest as first
     paginatedPosts=db.query(models.Post).filter(models.Post.user_id==currentUser.id).order_by(models.Post.created_at.desc()).offset(offset).limit(limit).all()
-    postresponse= [sch.PostResponse.displayUsersPosts(post) for post in paginatedPosts]
-    return {
-        "posts":postresponse,
-        "total":total,
-        # a extra utility offered to forntend letting it know whether 
-        # still the user has posts or not
-        "has_more":(limit+offset)<total
-    }
+    
+    # Build proper response
+    posts = []
+    for post in paginatedPosts:
+        media_url = None
+        if post.media_path:
+            media_url = f"{os.getenv('BASE_URL', 'http://localhost:8000')}/{os.getenv('MEDIA_FOLDER', 'posts_media')}/{post.media_path}"
+        posts.append(sch.PostListItemResponse(
+            id=post.id,
+            title=post.title,
+            media_url=media_url,
+            media_type=post.media_type,
+            likes=post.likes,
+            comments_count=post.comments_cnt,
+            created_at=post.created_at
+        ))
+    
+    pagination = sch.PaginationMetadata(
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=(limit+offset)<total
+    )
+    
+    return sch.PostListResponse(
+        posts=posts,
+        pagination=pagination
+    )
 # a patch endpoint so that user can update what he wants to unlike put
 # profile picture cannot be taken as a json data so it must be passed via Form
 # and the username and bio can be passed via Body params but its resulting in an
 # ambiguity as one of the section is being passed via Form and the other via Body
 # so made everything to be passed via Form only
-@router.patch("/me/updateInfo",status_code=status.HTTP_200_OK)
+@router.patch("/me/updateInfo",status_code=status.HTTP_200_OK, response_model=sch.UserProfileResponse)
 def updateUserInfo(username:str=Form(None),bio:str=Form(None),profile_picture:UploadFile=File(None),db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # to store updates the user does
     updates={}
@@ -116,7 +134,19 @@ def updateUserInfo(username:str=Form(None),bio:str=Form(None),profile_picture:Up
         db.query(models.User).filter(models.User.id==currentUser.id).update(updates)
         db.commit()
         db.refresh(currentUser)
-    return updates
+    
+    # Build proper response
+    return sch.UserProfileResponse(
+        id=currentUser.id,
+        username=currentUser.username,
+        nickname=currentUser.nickname,
+        bio=currentUser.bio,
+        profile_picture=currentUser.profile_picture,
+        posts_count=len(currentUser.posts),
+        followers_count=currentUser.followers_cnt,
+        following_count=currentUser.following_cnt,
+        created_at=currentUser.created_at
+    )
 
 @router.get("/me/votedOnPosts",status_code=status.HTTP_200_OK)
 def getVotedPosts(db:Session=Depends(db.getDb),currentUser:models.User =Depends(oauth2.getCurrentUser)):
@@ -133,20 +163,18 @@ def getVotedPosts(db:Session=Depends(db.getDb),currentUser:models.User =Depends(
         ]
     }
 
-@router.get("/me/voteStats",status_code=status.HTTP_200_OK)
+@router.get("/me/voteStats",status_code=status.HTTP_200_OK, response_model=sch.VoteStatsResponse)
 def voteStatus(db:Session=Depends(db.getDb),currentUser:models.User = Depends(oauth2.getCurrentUser)):
-    # using the func,case and quering in pass
+    # using the func,case and quering - BUG FIX: summary returns a list of Row objects
     summary=db.query(
-        func.count(case(models.Votes.action==True,1)).label("likes"),
-        func.count(case(models.Votes.action==False,1)).label("dislikes")
-    ).filter(models.User.id==currentUser.id).all()
-    return {
-        f"{currentUser.username} here's your vote stats":
-       { 
-           "number of liked posts":summary.likes,
-           "number of dislked posts":summary.dislikes
-       }
-}
+        func.count(case((models.Votes.action==True, 1))).label("likes"),
+        func.count(case((models.Votes.action==False, 1))).label("dislikes")
+    ).filter(models.Votes.user_id==currentUser.id).first()  # Changed .all() to .first()
+    
+    return sch.VoteStatsResponse(
+        liked_posts_count=summary.likes if summary else 0,
+        disliked_posts_count=summary.dislikes if summary else 0
+    )
 
 @router.get("/me/likedPosts")
 def get_liked_posts(db:Session = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
@@ -212,11 +240,11 @@ def getCommentedPosts(db:Session=Depends(db.getDb),currentUser:models.User =Depe
         ]
     }
 
-@router.get("/me/comment-stats",status_code=status.HTTP_200_OK)
+@router.get("/me/comment-stats",status_code=status.HTTP_200_OK, response_model=sch.CommentStatsResponse)
 def commentStatus(db:Session=Depends(db.getDb),currentUser:models.User = Depends(oauth2.getCurrentUser)):
-    comment_count = currentUser.total_comments
+    comment_count = len(currentUser.total_comments)
     uniquePostIds=db.query(distinct(models.Comments.post_id)).filter(models.Comments.user_id==currentUser.id).count()
-    return {
-        f"{currentUser.username} here's your comment stats":
-         f"you have a total of {len(comment_count)} comment's on {uniquePostIds} post's"
-       }
+    return sch.CommentStatsResponse(
+        total_comments=comment_count,
+        unique_posts_commented=uniquePostIds
+    )

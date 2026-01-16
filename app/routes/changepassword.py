@@ -5,7 +5,7 @@ from app.my_utils import utils
 
 router = APIRouter(tags=["changepassword"])
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=schemas.SuccessResponse)
 async def change_password(db: Session = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # call the generate otp method in the otp_service file which generates an otp
     otp=otp_service.generateOtp()
@@ -17,7 +17,7 @@ async def change_password(db: Session = Depends(db.getDb),currentUser:models.Use
     except:
         # if any probelm their raise an exception
         raise HTTPException(status_code=500, detail="Email send failed") 
-    return {"message": "OTP sent to your email! Check inbox"}
+    return schemas.SuccessResponse(message="OTP sent to your email! Check inbox")
 
 def verifyOtp(db:Session,otp:str,currentUser:models.User):
     # Check if OTP good
@@ -25,8 +25,8 @@ def verifyOtp(db:Session,otp:str,currentUser:models.User):
         return
     raise HTTPException(status_code=400,detail="Wrong or expired OTP")
 
-@router.post("/reset-password")
-def reset_password(request:schemas.ResetPassword=Body(...),db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+@router.post("/reset-password", response_model=schemas.SuccessResponse)
+def reset_password(request:schemas.PasswordResetRequest=Body(...),db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # first check whether the user entered the correct current password
     if not utils.verifyPassword(request.old_password,currentUser.password):
         raise HTTPException(status_code=403,detail="your old password is incorrect")
@@ -36,4 +36,4 @@ def reset_password(request:schemas.ResetPassword=Body(...),db:Session=Depends(db
     currentUser.password = utils.hashPassword(request.new_password)
     # Save to DB
     db.commit()
-    return {"message": "Password changed! Now login with new one."}
+    return schemas.SuccessResponse(message="Password changed successfully! Now login with new one.")

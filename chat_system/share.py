@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from app.db import getDb
 from app.models import SharedPost, Post, User
-from app.schemas import SharePostCreate,SharedPostResponse
+from app.schemas import SharePostRequest, SharedPostDetailResponse
 from app.oauth2 import getCurrentUser
 from app.my_utils.socket_manager import manager  # your WebSocket ConnectionManager
 from app.my_utils.time_formatting import format_timestamp
@@ -12,9 +12,9 @@ from app.my_utils.time_formatting import format_timestamp
 
 router = APIRouter(tags=["Share Post"])
 
-@router.post("/share",response_model=SharedPostResponse)
+@router.post("/share", response_model=SharedPostDetailResponse)
 async def share_post(
-    payload: SharePostCreate,
+    payload: SharePostRequest,
     db: Session = Depends(getDb),
     me: User = Depends(getCurrentUser),
 ):

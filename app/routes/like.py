@@ -10,9 +10,9 @@ router=APIRouter(
     tags=['likes']
 )
 
-@router.post("/vote/on_post",status_code=status.HTTP_201_CREATED)
+@router.post("/vote/on_post",status_code=status.HTTP_201_CREATED, response_model=sch.VoteResponse)
 # get the post user that user wants to vote on with which user he is
-def voteOnPost(post:sch.VoteModel=Body(...),db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+def voteOnPost(post:sch.VoteRequest=Body(...),db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # search for the post he wants to vote on against the db 
     # to firstly check whether that particular post is present or not in the db
     queriedPost=db.query(models.Post).filter(models.Post.id==post.post_id).first()
@@ -38,7 +38,7 @@ def voteOnPost(post:sch.VoteModel=Body(...),db:Session=Depends(getDb),currentUse
                     queriedPost.dis_likes-= 1
                 db.commit()
                 db.refresh(queriedPost)
-                return {"message": "Vote removed successfully"}
+                return sch.VoteResponse(message="Vote removed successfully", likes=queriedPost.likes, dislikes=queriedPost.dis_likes)
             else:
                 # Switching vote (e.g., like to dislike or vice versa)
                 currentVote.action = post.choice
@@ -50,7 +50,7 @@ def voteOnPost(post:sch.VoteModel=Body(...),db:Session=Depends(getDb),currentUse
                     queriedPost.dis_likes += 1
                 db.commit()
                 db.refresh(queriedPost)
-                return {"message": "Vote switched successfully"}
+                return sch.VoteResponse(message="Vote switched successfully", likes=queriedPost.likes, dislikes=queriedPost.dis_likes)
         else:
             # New vote
             newVote = models.Votes(
@@ -67,14 +67,14 @@ def voteOnPost(post:sch.VoteModel=Body(...),db:Session=Depends(getDb),currentUse
                 queriedPost.dis_likes += 1
             db.commit()
             db.refresh(queriedPost)
-            return {"message": "New vote added successfully"}
+            return sch.VoteResponse(message="New vote added successfully", likes=queriedPost.likes, dislikes=queriedPost.dis_likes)
     # triggers if any thing goes wrong in db as the logic is solid
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Database error, please try again"
                             )
-@router.post("/vote/on_comment",status_code=status.HTTP_201_CREATED)
-def likeAComment(comment:sch.CommentVoteModel=Body(...),db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+@router.post("/vote/on_comment",status_code=status.HTTP_201_CREATED, response_model=sch.VoteResponse)
+def likeAComment(comment:sch.CommentVoteRequest=Body(...),db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # search for the comment he wants to vote on against the db 
     # to firstly check whether that particular comment is present or not in the db
     queriedComment=db.query(models.Comments).filter(models.Comments.id==comment.comment_id).first()
@@ -98,7 +98,7 @@ def likeAComment(comment:sch.CommentVoteModel=Body(...),db:Session=Depends(getDb
                     queriedComment.likes-=1
                 db.commit()
                 db.refresh(queriedComment)
-                return {"message": "Vote removed successfully"}
+                return sch.VoteResponse(message="Vote removed successfully", likes=queriedComment.likes)
         else:
             # New like on a comment
             newVote=models.CommentVotes(
@@ -112,7 +112,7 @@ def likeAComment(comment:sch.CommentVoteModel=Body(...),db:Session=Depends(getDb
                 queriedComment.likes+=1
             db.commit()
             db.refresh(queriedComment)
-            return {"message": "New vote added successfully"}
+            return sch.VoteResponse(message="New vote added successfully", likes=queriedComment.likes)
     # triggers if any thing goes wrong in db as the logic is solid
     except IntegrityError:
         db.rollback()
