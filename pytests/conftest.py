@@ -14,11 +14,97 @@ from app.models import Base
 from app.db import getDb
 from app.config import settings
 
-# same username,password,hostname
+# SMART DATABASE HOST DETECTION FOR DOCKER vs LOCAL
+
+def get_test_database_host():
+    """
+    Automatically detect if running in Docker container and return appropriate host.
+    
+    Detection methods (in order):
+    1. Check for /.dockerenv file (exists in Docker containers)
+    2. Check if DATABASE_HOST env var is explicitly set to 'db'
+    3. Fall back to settings.database_host (localhost for local testing)
+    
+    Returns:
+        str: 'db' if in Docker, 'localhost' (or custom) if local
+    """
+    # Method 1: Check for Docker environment file
+    if os.path.exists('/.dockerenv'):
+        return 'db'
+    
+    # Method 2: Check environment variable override
+    env_host = os.getenv('DATABASE_HOST')
+    if env_host and env_host == 'db':
+        return 'db'
+    
+    # Method 3: Default to settings (localhost for local testing)
+    return settings.database_host
+
+# Use smart detection
+TEST_DATABASE_HOST = get_test_database_host()
+
+# PostgreSQL is case-insensitive by default and converts unquoted names to lowercase.
+# We standardize on lowercase to prevent mismatches between creation and connection.
+TEST_DB_NAME = f"{settings.database_name}_test".lower()
+
+# Construct test database URL with detected host and standardized lowercase name
 TEST_DB_URL = (
     f"postgresql://{settings.database_user}:{settings.database_password}"
-    f"@{settings.database_host}/{settings.database_name}_test"
+    f"@{TEST_DATABASE_HOST}/{TEST_DB_NAME}"
 )
+
+# Debug output to verify detection (helpful for troubleshooting)
+print(f"🔍 Test DB Host detected: {TEST_DATABASE_HOST}")
+print(f"🔗 Test DB URL: postgresql://***:***@{TEST_DATABASE_HOST}/{TEST_DB_NAME}")
+
+# CREATE TEST DATABASE IF IT DOESN'T EXIST
+
+def create_test_database_if_not_exists():
+    """
+    Create the test database if it doesn't exist.
+    Connects to the default 'postgres' database to create our test database.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.exc import ProgrammingError
+    
+    # Connect to default 'postgres' database to allow DB creation
+    default_db_url = (
+        f"postgresql://{settings.database_user}:{settings.database_password}"
+        f"@{TEST_DATABASE_HOST}/postgres"
+    )
+    
+    default_engine = create_engine(default_db_url, isolation_level="AUTOCOMMIT")
+    
+    try:
+        with default_engine.connect() as conn:
+            # Check if database exists (using the same lowercase name)
+            result = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
+                {"dbname": TEST_DB_NAME}
+            )
+            exists = result.scalar() is not None
+            
+            if not exists:
+                print(f"📦 Creating test database: {TEST_DB_NAME}")
+                # We use a f-string for the database name in CREATE DATABASE as it can't be parameterized
+                conn.execute(text(f'CREATE DATABASE "{TEST_DB_NAME}"'))
+                print(f"✅ Test database created successfully!")
+            else:
+                print(f"✅ Test database already exists: {TEST_DB_NAME}")
+    except ProgrammingError as e:
+        if "already exists" in str(e).lower():
+            print(f"✅ Test database already exists: {TEST_DB_NAME}")
+        else:
+            print(f"⚠️  Programming Error: {e}")
+            raise
+    except Exception as e:
+        print(f"⚠️  Error checking/creating test database: {e}")
+        raise
+    finally:
+        default_engine.dispose()
+
+# Create test database before creating engine
+create_test_database_if_not_exists()
 
 test_engine = create_engine(TEST_DB_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
@@ -27,9 +113,12 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_
 @pytest.fixture(scope="session",autouse=True)
 def setup_test_db():
     # drop everything before creating optional checking for robustness
+    print("🗑️  Dropping all existing tables...")
     Base.metadata.drop_all(bind=test_engine)
     # then create all tables
+    print("🏗️  Creating all tables...")
     Base.metadata.create_all(bind=test_engine)
+    print("✅ Test database setup complete!")
     yield
 
 def override_getDb():
