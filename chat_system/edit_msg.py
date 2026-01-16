@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app import models
 from fastapi import APIRouter,Depends
 from datetime import datetime
+from app.schemas import CanEditResponse
 from app import oauth2,db,config
 from app.my_utils.socket_manager import manager
 from datetime import datetime,timedelta,timezone
@@ -9,7 +10,7 @@ from app.my_utils.time_formatting import format_timestamp
 
 router=APIRouter(tags=['can_edit'])
 
-@router.get("/msg/{msg_id}/can_edit", response_model=sch.CanEditResponse)
+@router.get("/msg/{msg_id}/can_edit", response_model=CanEditResponse)
 def can_edit(msg_id:int,db:Session=Depends(db.getDb),currentUser:models.User = Depends(oauth2.getCurrentUser)):
     message = db.query(models.Message).filter(
         models.Message.id == msg_id,
@@ -18,7 +19,7 @@ def can_edit(msg_id:int,db:Session=Depends(db.getDb),currentUser:models.User = D
     # almost impossible practically
     # as a user cannot click for an edit over a message that doesnt exist
     if not message:
-        return sch.CanEditResponse(can_edit=False, message="Message not found")
+        return CanEditResponse(can_edit=False, message="Message not found")
     # if the time_difference is greater than 15 mins we say
     # well heyy frontend dont show the edit option by replying
     # the can_edit as false
