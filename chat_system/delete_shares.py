@@ -18,7 +18,7 @@ def deleteForMe(
 ):
     share=db.query(models.SharedPost).filter(
         models.SharedPost.id==share_id
-    )
+    ).first()
     if not share:
         return
     deleted_share=models.DeletedSharedPost(

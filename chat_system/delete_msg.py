@@ -19,7 +19,7 @@ def deleteForMe(
 ):
     message=db.query(models.Message).filter(
         models.Message.id==msg_id
-    )
+    ).first()
     if not message:
         return
     deleted_msg=models.DeletedMessage(

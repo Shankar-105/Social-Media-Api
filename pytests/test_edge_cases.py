@@ -28,8 +28,8 @@ def test_user_profile_response_structure(client, get_token):
     assert resp.status_code == 200
     profile = resp.json()
     
-    required_fields = ["profilePicture", "username", "nickname", 
-                      "bio", "posts", "followers", "following"]
+    required_fields = ["profile_picture", "username", "nickname", 
+                      "bio", "posts_count", "followers_count", "following_count"]
     for field in required_fields:
         assert field in profile
 

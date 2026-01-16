@@ -76,12 +76,34 @@ _Want to Run the Api or wanna test or make your own changes to the code here's [
 clone the repositroy and set up the environment._
 
 ---
+
+## 🧪 Testing — Comprehensive Test Suite!
+
+_Ready to verify everything works? Check out [`TESTS.md`](./TESTS.md) for a complete guide on running the test suite._
+
+**Quick Test Run:**
+- 🐳 **Inside Docker** (Recommended): `docker compose exec api pytest pytests/ -v`
+- 💻 **Locally**: Install dependencies and run `pytest pytests/ -v`
+
+**What's Tested:**
+- ✅ Authentication & Authorization
+- ✅ User Management & Profiles
+- ✅ Posts CRUD Operations
+- ✅ Comments & Interactions
+- ✅ Follow/Unfollow System
+- ✅ Real-time Chat (WebSockets)
+- ✅ Search & Feed Features
+- ✅ Edge Cases & Integration Tests
+
+_All tests use a separate test database—your dev data stays safe! 🛡️_
+
+---
 ## 🤝 Contributing
  open to all contributors 
 - **Clone the repo**
 - Create a new branch (`git checkout -b feature-xyz`)
 - Make your changes and commit with clear messages
-- Open a Pull Request (PR)
+- Raise and Issue and Open a Pull Request (PR)
 - I will review & merge if the changes make sense.
 - Want to add a frontend? **Sponsor a frontend integration!**  
   Just reach out or open a PR for any frontend you build (React, Vue, whatever you love).

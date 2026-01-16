@@ -1,5 +1,5 @@
 from fastapi import HTTPException,status,Body,APIRouter,Depends,Request,Query
-from app import models,db,schemas as sch,oauth2
+from app import models,db,schemas as sch,oauth2,config
 from sqlalchemy.orm import Session
 from typing import Annotated
 router=APIRouter(tags=['search'])

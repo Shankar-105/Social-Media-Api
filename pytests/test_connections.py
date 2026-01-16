@@ -10,6 +10,6 @@ def test_follow_unfollow(client, get_token):
     # Follow
     resp = client.post(f"/follow/{second_id}", headers={"Authorization": f"Bearer {get_token}"})
     assert resp.status_code in (201, 400)
-    # Unfollow
+    # Unfollow (returns 200 on success, 400 if not following)
     resp2 = client.delete(f"/unfollow/{second_id}", headers={"Authorization": f"Bearer {get_token}"})
-    assert resp2.status_code in (201, 400)
+    assert resp2.status_code in (200, 400)

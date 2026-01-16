@@ -196,7 +196,7 @@ def get_liked_posts(db:Session = Depends(db.getDb),currentUser:models.User=Depen
         ]
     }
 @router.get("/me/dislikedPosts")
-def get_liked_posts(db:Session = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):    # Query disliked posts
+def get_disliked_posts(db:Session = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):    # Query disliked posts
     liked_posts = (
         db.query(models.Post)
         .join(models.Votes,models.Votes.post_id==models.Post.id)

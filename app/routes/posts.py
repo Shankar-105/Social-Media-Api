@@ -66,7 +66,7 @@ def create_post(
     content:str=Form(...),
     media:Optional[UploadFile]=File(None),  # Optional file
     db: Session=Depends(getDb),
-    currentUser:dict=Depends(oauth2.getCurrentUser) 
+    currentUser:models.User=Depends(oauth2.getCurrentUser) 
 ):
     # set to None change if uploaded later
     media_path = None

@@ -266,9 +266,16 @@ class MessageDeleteRequest(BaseModel):
     message_id: int
     receiver_id: int
 
-class MessageReactionRequest(BaseModel):
+class ReactionPayload(BaseModel):
     """Request schema for reacting to a message"""
     message_id: int
+    reaction: str  # emoji
+
+class ReactedUsers(BaseModel):
+    """Legacy reacted users schema"""
+    user_id: int
+    username: str
+    profile_pic: Optional[str] = None
     reaction: str  # emoji
 
 class MessageDetailResponse(BaseModel):
