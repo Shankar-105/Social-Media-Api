@@ -110,16 +110,40 @@ test_engine = create_engine(TEST_DB_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 # pytest fixtures very helpful
-@pytest.fixture(scope="session",autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
-    # drop everything before creating optional checking for robustness
+    # Setup: Drop and recreate tables for a clean start
     print("🗑️  Dropping all existing tables...")
     Base.metadata.drop_all(bind=test_engine)
-    # then create all tables
     print("🏗️  Creating all tables...")
     Base.metadata.create_all(bind=test_engine)
     print("✅ Test database setup complete!")
     yield
+    # Teardown: Delete the test database after all tests are finished
+    print(f"\n🧹 Cleaning up test database: {TEST_DB_NAME}...")
+    # First, dispose the test engine to close all active connections
+    test_engine.dispose()
+    from sqlalchemy import text
+    # Connect to the default 'postgres' database to perform the drop
+    cleanup_db_url = (
+        f"postgresql://{settings.database_user}:{settings.database_password}"
+        f"@{TEST_DATABASE_HOST}/postgres"
+    )
+    cleanup_engine = create_engine(cleanup_db_url, isolation_level="AUTOCOMMIT")
+    try:
+        with cleanup_engine.connect() as conn:
+            # PostgreSQL 13+ supports WITH (FORCE) to drop DB with active connections
+            # We try WITH (FORCE) first, then fall back to standard DROP if it fails
+            try:
+                conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}" WITH (FORCE)'))
+            except Exception:
+                # Fallback for older PostgreSQL versions that don't support WITH (FORCE)
+                conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}"'))
+            print(f"✅ Test database '{TEST_DB_NAME}' deleted successfully!")
+    except Exception as e:
+        print(f"⚠️  Error deleting test database: {e}")
+    finally:
+        cleanup_engine.dispose()
 
 def override_getDb():
     db = TestingSessionLocal()
