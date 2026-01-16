@@ -12,22 +12,19 @@ router=APIRouter(
     tags=['me']
 )
 
-@router.get("/me/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfile)
+@router.get("/me/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfileResponse)
 def myProfile(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    currentUserProfile=sch.UserProfile(
-        profilePicture=currentUser.profile_picture,
+    return sch.UserProfileResponse(
+        id=currentUser.id,
         username=currentUser.username,
         nickname=currentUser.nickname,
-        bio=currentUser.bio,
-        posts=len(currentUser.posts),
-        followers=currentUser.followers_cnt,
-        following=currentUser.following_cnt,
+        bio=currentUser.bio or "",
+        profile_picture=currentUser.profile_picture,
+        posts_count=len(currentUser.posts),
+        followers_count=currentUser.followers_cnt,
+        following_count=currentUser.following_cnt,
+        created_at=currentUser.created_at
     )
-    if not currentUserProfile.bio:
-        currentUserProfile.bio=""
-    if not currentUserProfile.profilePicture:
-        currentUserProfile.profilePicture=""
-    return currentUserProfile
 
 @router.get("/me/profile/pic",status_code=status.HTTP_200_OK, response_model=sch.MediaInfo)
 def myProfilePicture(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):

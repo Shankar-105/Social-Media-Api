@@ -141,7 +141,7 @@ def deletePost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depe
 
 # update a specific post with id -> {id}
 @router.put("/posts/editPost/{postId}", response_model=sch.PostDetailResponse)
-def editPost(postId:int,post:sch.PostEssentials,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+def editPost(postId:int,post:sch.PostUpdateRequest,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     postToUpdate=db.query(models.Post).filter(models.Post.id==postId).first()
     if not postToUpdate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with Id {postId} not Found")

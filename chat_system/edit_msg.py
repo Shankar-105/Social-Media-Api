@@ -34,8 +34,8 @@ def can_edit(msg_id:int,db:Session=Depends(db.getDb),currentUser:models.User = D
     # and then perform a subtraction
     time_diff = curr_time - message.created_at
     if time_diff > timedelta(minutes=config.settings.max_edit_time):
-        return sch.CanEditResponse(can_edit=False)
-    return sch.CanEditResponse(can_edit=True)
+        return CanEditResponse(can_edit=False)
+    return CanEditResponse(can_edit=True)
     
 async def edit_message(db:Session,message_id:int,new_content:str,sender_id:int,recv_id:int):
     message = db.query(models.Message).filter(

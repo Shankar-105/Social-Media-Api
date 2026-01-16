@@ -386,128 +386,31 @@ class UserPostsResponse(BaseModel):
     posts: List[PostListItemResponse]
     total: int
 
-# LEGACY SCHEMAS (keeping for backwards compatibility during transition)
+# WEBSOCKET & FEED SCHEMAS (still in active use)
+# These schemas are used in WebSocket chat and feed endpoints
 
-class PostEssentials(BaseModel):
-    """Legacy schema - consider using PostCreateRequest instead"""
-    title: str
-    content: str
-    enable_comments: bool = True
-    hashtags: Optional[str] = None
-
-class UserEssentials(BaseModel):
-    """Legacy schema - consider using UserSignupRequest instead"""
-    username: str
-    password: str = Field(..., max_length=72)
-    nickname: str
-
-class Comment(BaseModel):
-    """Legacy schema - consider using CommentCreateRequest instead"""
-    post_id: int
-    content: str
-
-class EditCommentModel(BaseModel):
-    """Legacy schema - consider using CommentUpdateRequest instead"""
-    comment_content: str
-
-class VoteModel(BaseModel):
-    """Legacy schema - consider using VoteRequest instead"""
-    post_id: int
-    choice: bool
-
-class CommentVoteModel(BaseModel):
-    """Legacy schema - consider using CommentVoteRequest instead"""
-    comment_id: int
-    choice: bool
-
-class UserProfile(BaseModel):
-    """Legacy user profile schema"""
-    profilePicture: Optional[str] = None
-    username: str
-    nickname: str
-    bio: Optional[str] = None
-    posts: int
-    followers: int
-    following: int
-
-class ResetPassword(BaseModel):
-    """Legacy password reset schema"""
-    otp: str
-    old_password: str
-    new_password: str
-
-class SearchFeature(BaseModel):
-    """Legacy search schema"""
-    q: str = Query(None, description="Search query")
-    limit: int = 10
-    offset: int = 0
-    orderBy: Optional[str] = "created_at"
-
-class MessageResponse(BaseModel):
-    """Legacy message response"""
-    id: int
-    content: str
-    sender_id: int
-    receiver_id: int
-    created_at: datetime
-    is_read: bool
-    
-    model_config = ConfigDict(from_attributes=True)
-
-class ChatHistory(BaseModel):
-    """Legacy chat history schema"""
-    content: str
-    sender_id: int
-    receiver_id: int
-    created_at: datetime
-    is_read: bool
-    
-    model_config = ConfigDict(from_attributes=True)
+class MessageSchema(BaseModel):
+    """Message schema for WebSocket chat"""
+    to: int
+    content: Optional[str] = None
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None
 
 class UserOut(BaseModel):
-    """Legacy basic user info for post author"""
+    """Basic user info for post author in feeds"""
     id: int
     username: str
     profile_pic: Optional[str] = None
 
 class FeedPost(BaseModel):
-    """Legacy feed post schema"""
+    """Feed post schema"""
     post_id: int
     owner: UserOut
     
     model_config = ConfigDict(from_attributes=True)
 
-class SharePostCreate(BaseModel):
-    """Legacy share post schema"""
-    post_id: int
-    to_user_id: int
-    message: Optional[str] = None
-
-class SharedPostResponse(BaseModel):
-    """Legacy shared post response"""
-    id: int
-    post_id: int
-    from_user_id: int
-    to_user_id: int
-    message: Optional[str]
-    created_at: datetime
-    
-    model_config = ConfigDict(from_attributes=True)
-
-class ReactionPayload(BaseModel):
-    """Legacy reaction payload"""
-    message_id: int
-    reaction: str
-
-class ReactedUsers(BaseModel):
-    """Legacy reacted users schema"""
-    user_id: int
-    username: str
-    profile_pic: Optional[str] = None
-    reaction: str
-
 class ReplyMessageSchema(BaseModel):
-    """Legacy reply message schema"""
+    """Reply message schema for WebSocket"""
     to: int
     reply_msg_id: int
     content: Optional[str] = None
@@ -515,7 +418,7 @@ class ReplyMessageSchema(BaseModel):
     media_type: Optional[str] = None
 
 class ReplyToShareSchema(BaseModel):
-    """Legacy reply to share schema"""
+    """Reply to share schema for WebSocket"""
     shared_post_id: int
     content: Optional[str] = None
     media_url: Optional[str] = None
@@ -523,10 +426,3 @@ class ReplyToShareSchema(BaseModel):
     to: int
     
     model_config = ConfigDict(from_attributes=True)
-
-class MessageSchema(BaseModel):
-    """Legacy message schema"""
-    to: int
-    content: Optional[str] = None
-    media_url: Optional[str] = None
-    media_type: Optional[str] = None

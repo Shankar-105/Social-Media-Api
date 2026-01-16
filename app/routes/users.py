@@ -8,23 +8,20 @@ import os
 router=APIRouter(
     tags=['Users']
 )
-@router.get("/users/{user_id}/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfile)
+@router.get("/users/{user_id}/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfileResponse)
 def userProfile(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     user=db.query(models.User).filter(models.User.id==user_id).first()
-    userProfile=sch.UserProfile(
-        profilePicture=user.profile_picture,
+    return sch.UserProfileResponse(
+        id=user.id,
         username=user.username,
         nickname=user.nickname,
-        bio=user.bio,
-        posts=len(user.posts),
-        followers=user.followers_cnt,
-        following=user.following_cnt,
+        bio=user.bio or "",
+        profile_picture=user.profile_picture,
+        posts_count=len(user.posts),
+        followers_count=user.followers_cnt,
+        following_count=user.following_cnt,
+        created_at=user.created_at
     )
-    if not userProfile.bio:
-        userProfile.bio=""
-    if not userProfile.profilePicture:
-        userProfile.profilePicture="no profile picture"
-    return userProfile
 
 @router.get("/users/{user_id}/profile/pic",status_code=status.HTTP_200_OK, response_model=sch.MediaInfo)
 def myProfilePicture(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
@@ -45,7 +42,7 @@ def myProfilePicture(user_id:int,db:Session=Depends(db.getDb),currentUser:models
     )
 
 @router.post("/user/signup",status_code=status.HTTP_201_CREATED,response_model=sch.UserResponse)
-def createUser(userData:sch.UserEssentials=Body(...),db:Session=Depends(db.getDb)):
+def createUser(userData:sch.UserSignupRequest=Body(...),db:Session=Depends(db.getDb)):
     # hash the password using the bcrypt lib
     hashedPw=utils.hashPassword(userData.password)
     userData.password=hashedPw

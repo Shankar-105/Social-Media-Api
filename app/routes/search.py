@@ -5,7 +5,7 @@ from typing import Annotated
 router=APIRouter(tags=['search'])
 
 @router.get("/search", status_code=status.HTTP_202_ACCEPTED, response_model=sch.SearchResultResponse)
-def search(request:Request,searchParams:Annotated[sch.SearchFeature,Query()],db:Session=Depends(db.getDb),currenUser:models.User=Depends(oauth2.getCurrentUser)):
+def search(request:Request,searchParams:Annotated[sch.SearchRequest,Query()],db:Session=Depends(db.getDb),currenUser:models.User=Depends(oauth2.getCurrentUser)):
     if searchParams.q and searchParams.q.startswith("#"):
         # Hashtag search - search for posts
         hashtag = searchParams.q.lstrip("#")
