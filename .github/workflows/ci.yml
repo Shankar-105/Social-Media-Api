@@ -39,6 +39,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Create required directories
+        run: |
+          mkdir -p profilepics
+          mkdir -p posts_media
+          mkdir -p chat-media
+
       - name: Run pytest tests
         env:
           DATABASE_HOST: 127.0.0.1
