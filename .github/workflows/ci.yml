@@ -41,11 +41,11 @@ jobs:
 
       - name: Run pytest tests
         env:
-          DATABASE_HOST: localhost
+          DATABASE_HOST: 127.0.0.1
           DATABASE_PORT: 5432
           DATABASE_USER: postgres
           DATABASE_PASSWORD: password
-          DATABASE_NAME: social_media_db
+          DATABASE_NAME: postgres
           SECRET_KEY: test_secret_key
           ALGORITHM: HS256
           ACCESS_TOKEN_EXPIRE_TIME: 30
