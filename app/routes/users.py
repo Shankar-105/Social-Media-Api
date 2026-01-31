@@ -11,6 +11,10 @@ router=APIRouter(
 @router.get("/users/{user_id}/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfileResponse)
 def userProfile(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     user=db.query(models.User).filter(models.User.id==user_id).first()
+    
+    # Check if current user follows this user
+    is_following = user in currentUser.following
+    
     return sch.UserProfileResponse(
         id=user.id,
         username=user.username,
@@ -20,6 +24,7 @@ def userProfile(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User
         posts_count=len(user.posts),
         followers_count=user.followers_cnt,
         following_count=user.following_cnt,
+        is_following=is_following,
         created_at=user.created_at
     )
 

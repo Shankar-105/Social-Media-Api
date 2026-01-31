@@ -5,6 +5,7 @@ from app.db import getDb
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
+from typing import List
 
 router=APIRouter(tags=['connections'])
 
@@ -43,3 +44,33 @@ def unfollow(user_id:int,db:Session=Depends(getDb),currentUser:models.User=Depen
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to unfollow user")
     return sch.FollowResponse(message=f"Unfollowed user {userToUnFollow.username}", following_count=currentUser.following_cnt)
+
+@router.get("/users/{user_id}/followers", response_model=List[sch.UserBasicResponse])
+def get_followers(user_id:int,db:Session=Depends(getDb)):
+    user=db.query(models.User).filter(models.User.id==user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return [
+        sch.UserBasicResponse(
+            id=f.id,
+            username=f.username,
+            nickname=f.nickname,
+            profile_pic=f.profile_picture
+        ) for f in user.followers
+    ]
+
+@router.get("/users/{user_id}/following", response_model=List[sch.UserBasicResponse])
+def get_following(user_id:int,db:Session=Depends(getDb)):
+    user=db.query(models.User).filter(models.User.id==user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return [
+        sch.UserBasicResponse(
+            id=f.id,
+            username=f.username,
+            nickname=f.nickname,
+            profile_pic=f.profile_picture
+        ) for f in user.following
+    ]

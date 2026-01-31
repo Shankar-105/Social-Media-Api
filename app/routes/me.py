@@ -67,6 +67,9 @@ def getAllPosts(limit:int=Query(10, ge=1, le=100),
     # and order them by the latest as first
     paginatedPosts=db.query(models.Post).filter(models.Post.user_id==currentUser.id).order_by(models.Post.created_at.desc()).offset(offset).limit(limit).all()
     
+    # Get all post IDs the user has liked
+    liked_post_ids = {v.post_id for v in db.query(models.Votes).filter(models.Votes.user_id == currentUser.id, models.Votes.action == True).all()}
+    
     # Build proper response
     posts = []
     for post in paginatedPosts:
@@ -80,7 +83,8 @@ def getAllPosts(limit:int=Query(10, ge=1, le=100),
             media_type=post.media_type,
             likes=post.likes,
             comments_count=post.comments_cnt,
-            created_at=post.created_at
+            created_at=post.created_at,
+            is_liked=post.id in liked_post_ids
         ))
     
     pagination = sch.PaginationMetadata(

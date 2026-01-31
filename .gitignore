@@ -56,3 +56,7 @@ seed.py
 
 # ignore the  pytests cache
 .pytest_cache
+
+FastAPI_to_Express_Guide.md
+.agent
+frontend/

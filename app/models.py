@@ -6,6 +6,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from sqlalchemy.sql import func
 # structure or model of the db tables
+
 connections = Table(
     'connections', Base.metadata,
     Column('followed_id',Integer,ForeignKey('users.id',ondelete="CASCADE"),primary_key=True),
@@ -76,6 +77,7 @@ class OTP(Base):
     otp = Column(String, nullable=False)
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=func.now())
+
 class Votes(Base):
     __tablename__='votes'
     post_id=Column(Integer,ForeignKey("posts.id",ondelete="CASCADE"),primary_key=True,nullable=False)

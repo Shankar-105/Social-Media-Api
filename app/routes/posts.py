@@ -30,6 +30,9 @@ def getPost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depends
         db.commit()
         db.refresh(reqPost)  # Refresh to get updated post data
     
+    # Check if liked
+    is_liked = db.query(models.Votes).filter(models.Votes.post_id == postId, models.Votes.user_id == currentUser.id, models.Votes.action == True).first() is not None
+    
     # Build proper response with schema
     media_url = None
     if reqPost.media_path:
@@ -55,6 +58,7 @@ def getPost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depends
         enable_comments=reqPost.enable_comments,
         hashtags=reqPost.hashtags,
         created_at=reqPost.created_at,
+        is_liked=is_liked,
         owner=owner
     )
 

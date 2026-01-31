@@ -39,7 +39,7 @@ class UserSignupRequest(BaseModel):
     """Request schema for user signup"""
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6, max_length=72)
-    nickname: str = Field(..., min_length=1, max_length=50)
+    nickname: Optional[str] = Field(None, max_length=50)
     email: Optional[EmailStr] = None
     
 class UserLoginRequest(BaseModel):
@@ -72,6 +72,7 @@ class UserProfileResponse(BaseModel):
     posts_count: int
     followers_count: int
     following_count: int
+    is_following: bool = False
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
@@ -123,6 +124,7 @@ class PostDetailResponse(BaseModel):
     enable_comments: bool
     hashtags: Optional[str] = None
     created_at: datetime
+    is_liked: bool = False
     owner: UserBasicResponse
     
     model_config = ConfigDict(from_attributes=True)
@@ -136,6 +138,7 @@ class PostListItemResponse(BaseModel):
     likes: int
     comments_count: int
     created_at: datetime
+    is_liked: bool = False
     
     model_config = ConfigDict(from_attributes=True)
 
