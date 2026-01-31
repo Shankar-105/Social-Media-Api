@@ -45,8 +45,33 @@ def unfollow(user_id:int,db:Session=Depends(getDb),currentUser:models.User=Depen
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to unfollow user")
     return sch.FollowResponse(message=f"Unfollowed user {userToUnFollow.username}", following_count=currentUser.following_cnt)
 
+@router.delete("/remove_follower/{user_id}", status_code=status.HTTP_200_OK, response_model=sch.FollowResponse)
+def remove_follower(user_id: int, db: Session = Depends(getDb), currentUser: models.User = Depends(oauth2.getCurrentUser)):
+    userToRemove = db.query(models.User).filter(models.User.id == user_id).first()
+    if not userToRemove:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User doesn't exist")
+    
+    # Check if this user is actually following me
+    if userToRemove not in currentUser.followers:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This user is not following you")
+
+    try:
+        # Remove them from my followers list
+        currentUser.followers.remove(userToRemove)
+        
+        # Update counts
+        currentUser.followers_cnt = len(currentUser.followers)
+        userToRemove.following_cnt = len(userToRemove.following) # They are following me, so their following count decreases
+        
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to remove follower")
+        
+    return sch.FollowResponse(message=f"Removed follower {userToRemove.username}", following_count=currentUser.following_cnt)
+
 @router.get("/users/{user_id}/followers", response_model=List[sch.UserBasicResponse])
-def get_followers(user_id:int,db:Session=Depends(getDb)):
+def get_followers(user_id:int,db:Session=Depends(getDb), currentUser: models.User = Depends(oauth2.getCurrentUser)):
     user=db.query(models.User).filter(models.User.id==user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -56,12 +81,13 @@ def get_followers(user_id:int,db:Session=Depends(getDb)):
             id=f.id,
             username=f.username,
             nickname=f.nickname,
-            profile_pic=f.profile_picture
+            profile_pic=f.profile_picture,
+            is_following=(f in currentUser.following)
         ) for f in user.followers
     ]
 
 @router.get("/users/{user_id}/following", response_model=List[sch.UserBasicResponse])
-def get_following(user_id:int,db:Session=Depends(getDb)):
+def get_following(user_id:int,db:Session=Depends(getDb), currentUser: models.User = Depends(oauth2.getCurrentUser)):
     user=db.query(models.User).filter(models.User.id==user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -71,6 +97,7 @@ def get_following(user_id:int,db:Session=Depends(getDb)):
             id=f.id,
             username=f.username,
             nickname=f.nickname,
-            profile_pic=f.profile_picture
+            profile_pic=f.profile_picture,
+            is_following=(f in currentUser.following)
         ) for f in user.following
     ]

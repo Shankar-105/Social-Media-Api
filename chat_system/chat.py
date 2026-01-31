@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
 from sqlalchemy.orm import Session
 from app.my_utils.socket_manager import manager
-from chat_system import delete_msg,delete_shares,dm,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg,reply_to_share,media_msg
+from chat_system import delete_msg,delete_shares,dm,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg,reply_to_share,media_msg,read_receipt
 import json,asyncio
 from datetime import datetime
 router = APIRouter(tags=["chat"])
@@ -137,6 +137,10 @@ async def chat(
                  is_typing=message_data.get("is_typing")
                  receiver_id=message_data.get("receiver_id")
                  await manager.typing_status(type=type,receiver_id=receiver_id,typing_status=is_typing)
+            # if its of type read_receipt
+            elif message_data.get("type") == "read_receipt":
+                # client sends: {"type": "read_receipt", "sender_id": <id of user whose messages I read>}
+                await read_receipt.mark_as_read(message_data, current_user.id, db)
             # if the message is of type reply
             elif message_data.get("type") == "reply_message":
                 receiver_id=int(message_data.get("to"))

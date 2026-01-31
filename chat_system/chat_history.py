@@ -8,7 +8,7 @@ from sqlalchemy import or_,and_,select
 from typing import List
 from sqlalchemy.exc import IntegrityError
 
-router = APIRouter(tags=["chat_history"])
+router = APIRouter(prefix="/chat", tags=["chat_history"])
 
 @router.get("/history/{friend_id}")
 def get_chat_history(
@@ -16,9 +16,7 @@ def get_chat_history(
     db: Session = Depends(getDb),
     currentUser: models.User = Depends(oauth2.getCurrentUser),
 ):
-    if friend_id == currentUser.id:
-        raise HTTPException(status_code=400, detail="Cannot chat with yourself")
-
+    # ... (existing content logic) ...
     # CRITICAL: Hide undelivered messages from friend
     # firstly let us fetch out the 'delted for me' msgs by the current user
     subq=(
@@ -37,9 +35,8 @@ def get_chat_history(
         or_(
             # show everything from sender side even if read or not
             and_(models.Message.sender_id == currentUser.id, models.Message.receiver_id == friend_id),
-            # from receiver side show only the messages which are actually delivered
-            and_(models.Message.sender_id == friend_id, models.Message.receiver_id == currentUser.id,
-                 models.Message.is_read == True)
+            # from receiver side show EVERYTHING addressed to me
+            and_(models.Message.sender_id == friend_id, models.Message.receiver_id == currentUser.id)
         ),
         # 3. Not deleted by THIS user (NOT EXISTS)
         ~models.Message.id.in_(subq)
@@ -58,10 +55,9 @@ def get_chat_history(
             (models.SharedPost.from_user_id == currentUser.id) &
             (models.SharedPost.to_user_id == friend_id)
         ) | (
-            # Friend's messages only show delivered msgs is_read -> True
+            # Friend's messages show all
             (models.SharedPost.from_user_id == friend_id) &
-            (models.SharedPost.to_user_id == currentUser.id) &
-            (models.SharedPost.is_read == True)
+            (models.SharedPost.to_user_id == currentUser.id)
         ),(
         ~models.SharedPost.id.in_(deleted_shared_subq)    
         )
@@ -133,3 +129,66 @@ def get_chat_history(
         })
     chat_history.sort(key=lambda x : x.get("timestamp") if "timestamp" in  x else x.get("sent_at"))
     return chat_history  # oldest first
+
+@router.get("/recent-chats")
+def get_recent_chats(
+    db: Session = Depends(getDb),
+    currentUser: models.User = Depends(oauth2.getCurrentUser)
+):
+    # Fetch all messages involving the user, ordered by time desc
+    # This is not the most efficient for millions of rows but works for thousands.
+    # A true optimized version would use window functions or a separate conversation table.
+    
+    all_messages = db.query(models.Message).filter(
+        or_(
+            models.Message.sender_id == currentUser.id,
+            models.Message.receiver_id == currentUser.id
+        ),
+        models.Message.is_deleted_for_everyone == False
+    ).order_by(models.Message.created_at.desc()).limit(1000).all()
+    
+    # Process in python to get unique conversations (other_user_id)
+    conversations = {} # other_user_id -> last_message_obj
+    
+    for msg in all_messages:
+        other_id = msg.receiver_id if msg.sender_id == currentUser.id else msg.sender_id
+        if other_id not in conversations:
+            conversations[other_id] = msg
+            
+    # Also fetch users
+    if not conversations:
+        return []
+        
+    other_user_ids = list(conversations.keys())
+    users = db.query(models.User).filter(models.User.id.in_(other_user_ids)).all()
+    user_map = {u.id: u for u in users}
+    
+    # Construct response
+    results = []
+    for uid, msg in conversations.items():
+        user = user_map.get(uid)
+        if not user:
+            continue
+            
+        results.append({
+            "id": user.id,
+            "username": user.username,
+            "nickname": user.nickname,
+            "profile_pic": user.profile_picture,
+            "last_message": {
+                "content": msg.content,
+                "timestamp": format_timestamp(msg.created_at),
+                "is_read": msg.is_read,
+                "is_me": msg.sender_id == currentUser.id,
+                "media_type": msg.media_type
+            }
+        })
+        
+    # Sort by message time (descending)
+    # format_timestamp returns buffer string, but we want to sort by original object created_at?
+    # Actually results were populated based on `all_messages` iteration which was sorted DESC.
+    # But dictionary iteration might lose order legally (though usually insertion order in Python 3.7+).
+    # To be safe:
+    results.sort(key=lambda x: conversations[x["id"]].created_at, reverse=True)
+    
+    return results

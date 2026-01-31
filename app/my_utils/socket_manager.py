@@ -84,7 +84,7 @@ class ConnectionManager:
             await ws.send_json({"type": "ping"})
             print(f"Sent ping to user {user_id}")
             # wait for main reader to set the event
-            await asyncio.wait_for(event.wait(), timeout=3000.0)
+            await asyncio.wait_for(event.wait(), timeout=20.0)
             print(f"Pong received from user {user_id}")
             return True
         except asyncio.TimeoutError:
@@ -109,25 +109,6 @@ class ConnectionManager:
             print(f"Ping task cancelled for user {user_id}")
         except Exception as e:
             print(f"Per-connection pinger error for user {user_id}: {e}")
-
-    """ async def periodic_ping(self):
-        while True:
-            await asyncio.sleep(20)
-            user_ids = list(self.active_connections.keys())
-            # create tasks to ping all users concurrently
-            tasks = [asyncio.create_task(self.send_ping(uid)) for uid in user_ids]
-            # wait for all to finish concurrently
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            # process results per user
-            for uid, res in zip(user_ids, results):
-                ok = False
-                if isinstance(res, Exception):
-                    print(f"Ping task error for user {uid}: {res}")
-                else:
-                    ok = bool(res)
-                if not ok:
-                    print(f"Zombie: User {uid} → removing")
-                    self.disconnect(uid) """
                     
     async def typing_status(self,type:str,receiver_id:int,typing_status:bool):
             message={

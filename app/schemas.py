@@ -59,6 +59,7 @@ class UserBasicResponse(BaseModel):
     username: str
     nickname: str
     profile_pic: Optional[str] = None
+    is_following: bool = False
     
     model_config = ConfigDict(from_attributes=True)
 
