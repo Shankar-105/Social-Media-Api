@@ -57,7 +57,7 @@ class UserBasicResponse(BaseModel):
     """General Minimal user info"""
     id: int
     username: str
-    nickname: str
+    nickname: Optional[str] =None
     profile_pic: Optional[str] = None
     is_following: bool = False
     
