@@ -1,119 +1,108 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
-import { ChatSocket, chatService } from '@/api/chatService';
+import { chatService } from '@/api/chatService';
 import { Loader2, MessageCircle } from 'lucide-react';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import ChatWindow from '@/components/chat/ChatWindow';
+import { useSocket } from '@/context/SocketContext';
 
 export default function Messages() {
-    const [chats, setChats] = useState<any[]>([]);
     const [activeChat, setActiveChat] = useState<any | null>(null);
     const [messages, setMessages] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [otherUserTyping, setOtherUserTyping] = useState(false);
     const [replyTo, setReplyTo] = useState<any | null>(null);
 
     const user = useAuthStore((state) => state.user);
-    const token = useAuthStore((state) => state.token);
-    const socketRef = useRef<ChatSocket | null>(null);
     const location = useLocation();
+    const { socket, setActiveChatId, resetUnreadCount, recentChats, refreshRecentChats } = useSocket();
 
-    // 1. Fetch Chat List
+    // Reset global unread count when visiting Messages page
     useEffect(() => {
-        const fetchChats = async () => {
-            try {
-                const data = await chatService.getRecentChats();
-                setChats(data.length > 0 ? data : []);
-                setIsLoading(false);
-            } catch (err) {
-                setChats([]);
-                setIsLoading(false);
-            }
-        };
-        fetchChats();
-    }, []);
+        resetUnreadCount();
+        refreshRecentChats();
+    }, [resetUnreadCount, refreshRecentChats]);
+
+    // Update context about which chat is active for notification suppression
+    useEffect(() => {
+        setActiveChatId(activeChat?.id || null);
+    }, [activeChat, setActiveChatId]);
 
     // 2. Handle navigation from Profile
     useEffect(() => {
         if (location.state?.chatWith) {
             const chatUser = location.state.chatWith;
-            setChats(prev => {
-                const exists = prev.some(c => c.id === chatUser.id);
-                if (!exists) return [chatUser, ...prev];
-                return prev;
-            });
             setActiveChat(chatUser);
             window.history.replaceState({}, document.title);
         }
     }, [location]);
 
-    // 3. Socket Connection & Events
+    // 3. Socket Event Handling
     useEffect(() => {
-        if (activeChat && user && token) {
-            if (socketRef.current) {
-                socketRef.current.disconnect();
+        if (!socket || !activeChat || !user) return;
+
+        const handleMessage = (msg: any) => {
+            if (msg.type === 'typing') {
+                if (msg.receiver_id === user.id && Number(msg.sender_id) === activeChat.id) {
+                    setOtherUserTyping(msg.is_typing);
+                }
+            } else if (msg.type === 'reaction') {
+                // standardized event from backend: msg.message_id, msg.reaction
+                setMessages((prev) => prev.map(m =>
+                    m.id === msg.message_id
+                        ? { ...m, reactions: [...(m.reactions || []), msg] }
+                        : m
+                ));
+            } else if (msg.type === 'edit_message') {
+                // standardized event from backend: msg.message_id, msg.new_content
+                setMessages((prev) => prev.map(m =>
+                    m.id === msg.message_id
+                        ? { ...m, content: msg.new_content, is_edited: true }
+                        : m
+                ));
+            } else if (msg.type === 'delete_message') {
+                // standardized event from backend: msg.message_id
+                setMessages((prev) => prev.filter(m => m.id !== msg.message_id));
+            } else if (msg.type === 'read_receipt') {
+                if (msg.reader_id === activeChat.id) {
+                    setMessages(prev => prev.map(m => ({ ...m, is_read: true })));
+                }
+            } else if (msg.type === 'message' || msg.type === 'shared_post') {
+                if (msg.sender_id === activeChat.id || msg.sender_id === user.id) {
+                    setMessages((prev) => [...prev, msg]);
+                    if (msg.sender_id === activeChat.id) {
+                        socket?.sendRead(activeChat.id);
+                    }
+                }
             }
+        };
 
-            socketRef.current = new ChatSocket(user.id, token);
-            socketRef.current.connect((msg) => {
-                if (msg.type === 'typing') {
-                    if (msg.receiver_id === user.id && Number(msg.sender_id) === activeChat.id) {
-                        setOtherUserTyping(msg.is_typing);
-                    }
-                } else if (msg.type === 'reaction') {
-                    setMessages((prev) => prev.map(m =>
-                        m.id === msg.message_id
-                            ? { ...m, reactions: [...(m.reactions || []), msg] }
-                            : m
-                    ));
-                } else if (msg.type === 'edit_message') {
-                    setMessages((prev) => prev.map(m =>
-                        m.id === msg.msg_id
-                            ? { ...m, content: msg.new_content, is_edited: true }
-                            : m
-                    ));
-                } else if (msg.type === 'delete_for_everyone') {
-                    setMessages((prev) => prev.filter(m => m.id !== msg.message_id));
-                } else if (msg.type === 'read_receipt') {
-                    if (msg.reader_id === activeChat.id) {
-                        setMessages(prev => prev.map(m => ({ ...m, is_read: true })));
-                    }
-                } else {
-                    if (msg.sender_id === activeChat.id || msg.sender_id === user.id) {
-                        setMessages((prev) => [...prev, msg]);
-                        if (msg.sender_id === activeChat.id) {
-                            socketRef.current?.sendRead(activeChat.id);
-                        }
-                    }
-                }
-            });
+        socket.addListener(handleMessage);
 
-            const fetchHistory = async () => {
-                try {
-                    const history = await chatService.getChatHistory(activeChat.id);
-                    setMessages(history);
-                } catch (err) {
-                    console.error('Failed to fetch chat history', err);
-                }
-            };
-            fetchHistory();
+        const fetchHistory = async () => {
+            try {
+                const history = await chatService.getChatHistory(activeChat.id);
+                setMessages(history);
+            } catch (err) {
+                console.error('Failed to fetch chat history', err);
+            }
+        };
+        fetchHistory();
 
-            return () => {
-                socketRef.current?.disconnect();
-            };
-        }
-    }, [activeChat, user, token]);
+        return () => {
+            socket.removeListener(handleMessage);
+        };
+    }, [activeChat, user, socket]);
 
     // Handlers
     const handleSendMessage = (content: string) => {
-        if (!socketRef.current || !activeChat) return;
+        if (!socket || !activeChat) return;
 
         if (replyTo) {
-            socketRef.current.sendReply(activeChat.id, replyTo.id, content);
+            socket.sendReply(activeChat.id, replyTo.id, content);
             setReplyTo(null);
         } else {
-            socketRef.current.sendMessage({
+            socket.sendMessage({
                 to: activeChat.id,
                 content: content,
             });
@@ -121,17 +110,17 @@ export default function Messages() {
     };
 
     const handleReaction = (msgId: number, emoji: string) => {
-        socketRef.current?.sendReaction(msgId, emoji);
+        socket?.sendReaction(msgId, emoji);
     };
 
     const handleTyping = (typing: boolean) => {
         if (activeChat) {
-            socketRef.current?.sendTyping(typing, activeChat.id);
+            socket?.sendTyping(typing, activeChat.id);
         }
     };
 
     const handleRead = (senderId: number) => {
-        socketRef.current?.sendRead(senderId);
+        socket?.sendRead(senderId);
     };
 
     if (!user) return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
@@ -141,10 +130,9 @@ export default function Messages() {
             {/* Sidebar */}
             <div className={`w-full md:w-[350px] shrink-0 ${activeChat ? 'hidden md:flex' : 'flex'}`}>
                 <ChatSidebar
-                    chats={chats}
+                    chats={recentChats}
                     activeChat={activeChat}
                     onSelectChat={setActiveChat}
-                    isLoading={isLoading}
                 />
             </div>
 
@@ -164,8 +152,8 @@ export default function Messages() {
                             onSendMessage={handleSendMessage}
                             onReaction={handleReaction}
                             onReply={setReplyTo}
-                            onEdit={(id, content) => socketRef.current?.sendEdit(id, content, activeChat.id)}
-                            onDelete={(id) => socketRef.current?.sendDelete(id, activeChat.id)}
+                            onEdit={(id, content) => socket?.sendEdit(id, content, activeChat.id)}
+                            onDelete={(id) => socket?.sendDelete(id, activeChat.id)}
                             onTyping={handleTyping}
                             isTyping={otherUserTyping}
                             onRead={handleRead}

@@ -49,14 +49,10 @@ async def edit_message(db:Session,message_id:int,new_content:str,sender_id:int,r
     if message.content.strip() == new_content:
         # No change
         payload = {
-        "type":"edited_msg",
+        "type":"edit_message",
         # new content is the same old content
         "new_content":message.content,
         "message_id": message_id,
-        # is_edited flag is true if its already edited before
-        # fasle if not edited before becasue as the user
-        # is not changing anything and if it's not edited before 
-        # we wouldnt assume that as an edit
         "is_edited":False if not message.is_edited else True
     }
         await manager.send_json_to_user(payload,recv_id)
@@ -72,7 +68,7 @@ async def edit_message(db:Session,message_id:int,new_content:str,sender_id:int,r
     db.refresh(message)
     print(message.is_read)
     payload = {
-        "type":"edited_msg",
+        "type":"edit_message",
         "new_content":new_content,
         "message_id": message_id,
         "is_edited":True

@@ -9,7 +9,7 @@ interface ChatSidebarProps {
     chats: any[];
     activeChat: any | null;
     onSelectChat: (chat: any) => void;
-    isLoading: boolean;
+    isLoading?: boolean;
 }
 
 export default function ChatSidebar({ chats, activeChat, onSelectChat, isLoading }: ChatSidebarProps) {

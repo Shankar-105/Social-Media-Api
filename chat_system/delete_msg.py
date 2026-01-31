@@ -56,7 +56,7 @@ async def delete_for_everyone(
     db.commit()
     # Notify BOTH users instantly
     payload = {
-        "type":"message_deleted",
+        "type":"delete_message",
         "message_id": message_id,
         "is_deleted_for_everyone":True
     }

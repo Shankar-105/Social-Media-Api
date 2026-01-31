@@ -75,13 +75,11 @@ async def react(
     
     # payload
     payload = {
-        "type": "reaction_update",
-        "data": {
-            "message_id": the_msg.id,
-            "reaction": reaction.reaction if isNewRecord else None,
-            "reaction_count":the_msg.reaction_cnt,
-            "reacted_by": user_id
-        }
+        "type": "reaction",
+        "message_id": the_msg.id,
+        "reaction": reaction.reaction if isNewRecord else None,
+        "reaction_count": the_msg.reaction_cnt,
+        "reacted_by": user_id
     }
     # Send to BOTH sender and receiver
     await manager.send_personal_message(payload,the_msg.sender_id)

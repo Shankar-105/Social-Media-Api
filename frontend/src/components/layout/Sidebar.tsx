@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import CreatePostModal from '@/components/common/CreatePostModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { useSocket } from '@/context/SocketContext';
 
 const navItems = [
     { icon: Home, label: 'Home', path: '/' },
@@ -33,6 +34,7 @@ export default function Sidebar() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const location = useLocation();
     const user = useAuthStore((state) => state.user);
+    const { unreadCount } = useSocket();
 
     return (
         <div className="flex flex-col h-full border-r border-zinc-200 dark:border-zinc-800 px-3 py-5 bg-white dark:bg-zinc-950">
@@ -50,6 +52,8 @@ export default function Sidebar() {
             <nav className="flex-1 space-y-2">
                 {navItems.map((item) => {
                     const isActive = location.pathname === item.path;
+                    const isMessages = item.label === 'Messages';
+
                     return (
                         <React.Fragment key={item.label}>
                             {item.isButton ? (
@@ -67,13 +71,20 @@ export default function Sidebar() {
                                 <Link
                                     to={item.path}
                                     className={cn(
-                                        "flex items-center space-x-4 px-3 py-3 rounded-lg transition-colors group",
+                                        "flex items-center space-x-4 px-3 py-3 rounded-lg transition-colors group relative",
                                         isActive
                                             ? "font-bold text-zinc-900 dark:text-zinc-50"
                                             : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
                                     )}
                                 >
-                                    <item.icon className={cn("h-7 w-7 transition-transform group-hover:scale-110", isActive && "stroke-[2.5px]")} />
+                                    <div className="relative">
+                                        <item.icon className={cn("h-7 w-7 transition-transform group-hover:scale-110", isActive && "stroke-[2.5px]")} />
+                                        {isMessages && unreadCount > 0 && (
+                                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-950">
+                                                {unreadCount > 9 ? '9+' : unreadCount}
+                                            </span>
+                                        )}
+                                    </div>
                                     <span className="hidden lg:block text-[16px]">{item.label}</span>
                                 </Link>
                             )}

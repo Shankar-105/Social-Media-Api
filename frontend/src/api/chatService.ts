@@ -15,13 +15,24 @@ export class ChatSocket {
     private socket: WebSocket | null = null;
     private userId: number;
     private token: string;
+    private listeners: ((msg: any) => void)[] = [];
 
     constructor(userId: number, token: string) {
         this.userId = userId;
         this.token = token;
     }
 
-    connect(onMessage: (msg: any) => void) {
+    addListener(listener: (msg: any) => void) {
+        this.listeners.push(listener);
+    }
+
+    removeListener(listener: (msg: any) => void) {
+        this.listeners = this.listeners.filter(l => l !== listener);
+    }
+
+    connect(onMessage?: (msg: any) => void) {
+        if (onMessage) this.addListener(onMessage);
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/^https?:\/\//, '') || `${window.location.hostname}:8000`;
         this.socket = new WebSocket(`${protocol}//${baseUrl}/chat/ws/${this.userId}?token=${this.token}`);
@@ -31,7 +42,7 @@ export class ChatSocket {
             if (data.type === 'ping') {
                 this.socket?.send(JSON.stringify({ type: 'pong' }));
             } else {
-                onMessage(data);
+                this.listeners.forEach(listener => listener(data));
             }
         };
 

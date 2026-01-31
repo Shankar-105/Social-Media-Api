@@ -12,114 +12,117 @@ import Settings from '@/pages/Settings';
 import Analytics from '@/pages/Analytics';
 import MainLayout from '@/components/layout/MainLayout';
 import { useAuthStore } from '@/store/authStore';
+import { SocketProvider } from '@/context/SocketContext';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="instaclone-theme">
-      <Router>
-        <Routes>
-          <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
-          <Route path="/signup" element={!isAuthenticated ? <Signup /> : <Navigate to="/" />} />
-          <Route
-            path="/"
-            element={
-              isAuthenticated ? (
-                <MainLayout>
-                  <Feed />
-                </MainLayout>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-          <Route
-            path="/profile/:userId"
-            element={
-              isAuthenticated ? (
-                <MainLayout>
-                  <Profile />
-                </MainLayout>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-          <Route
-            path="/messages"
-            element={
-              isAuthenticated ? (
-                <MainLayout>
-                  <Messages />
-                </MainLayout>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-          <Route
-            path="/search"
-            element={
-              isAuthenticated ? (
-                <MainLayout>
-                  <Search />
-                </MainLayout>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-          <Route
-            path="/explore"
-            element={
-              isAuthenticated ? (
-                <MainLayout>
-                  <Explore />
-                </MainLayout>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-          <Route
-            path="/notifications"
-            element={
-              isAuthenticated ? (
-                <MainLayout>
-                  <Notifications />
-                </MainLayout>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              isAuthenticated ? (
-                <MainLayout>
-                  <Settings />
-                </MainLayout>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-          <Route
-            path="/analytics"
-            element={
-              isAuthenticated ? (
-                <MainLayout>
-                  <Analytics />
-                </MainLayout>
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-        </Routes>
-      </Router>
+      <SocketProvider>
+        <Router>
+          <Routes>
+            <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
+            <Route path="/signup" element={!isAuthenticated ? <Signup /> : <Navigate to="/" />} />
+            <Route
+              path="/"
+              element={
+                isAuthenticated ? (
+                  <MainLayout>
+                    <Feed />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/profile/:userId"
+              element={
+                isAuthenticated ? (
+                  <MainLayout>
+                    <Profile />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/messages"
+              element={
+                isAuthenticated ? (
+                  <MainLayout>
+                    <Messages />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/search"
+              element={
+                isAuthenticated ? (
+                  <MainLayout>
+                    <Search />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/explore"
+              element={
+                isAuthenticated ? (
+                  <MainLayout>
+                    <Explore />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/notifications"
+              element={
+                isAuthenticated ? (
+                  <MainLayout>
+                    <Notifications />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                isAuthenticated ? (
+                  <MainLayout>
+                    <Settings />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                isAuthenticated ? (
+                  <MainLayout>
+                    <Analytics />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+          </Routes>
+        </Router>
+      </SocketProvider>
     </ThemeProvider>
   );
 }
