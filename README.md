@@ -116,5 +116,5 @@ If you have questions, need guidance, or want to contribute something unique, ju
 **ANITS College, Vizag**
 
 > Thanks for checking out the project.
-> If you use this API , let me know—would love to hear your story! 🚀 🎓
+> If you use this API , let me know—would love to hear you 🚀 🎓
 ---
