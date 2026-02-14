@@ -62,3 +62,6 @@ my-mini-frontend/
 FastAPI_to_Express_Guide.md
 # avoid ui-ux-promax agent
 .agent
+
+asgi_server.py
+ex.md

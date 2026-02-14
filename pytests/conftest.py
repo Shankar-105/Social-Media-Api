@@ -19,7 +19,6 @@ from app.config import settings
 def get_test_database_host():
     """
     Automatically detect if running in Docker container and return appropriate host.
-    
     Detection methods (in order):
     1. Check for /.dockerenv file (exists in Docker containers)
     2. Check if DATABASE_HOST env var is explicitly set to 'db'
