@@ -1,4 +1,4 @@
-# socket_manager.py
+# connection_manager.py
 from fastapi import WebSocket
 from typing import Dict
 import json, asyncio
@@ -17,6 +17,7 @@ class ConnectionManager:
             "pong_event": asyncio.Event(),
             "last_pong": datetime.utcnow()
         }
+        # no need of awaiting for this task to be completed just move further
         self.active_connections[user_id]["ping_task"] = asyncio.create_task(
     self._per_connection_pinger(user_id)
 )
@@ -84,7 +85,7 @@ class ConnectionManager:
             await ws.send_json({"type": "ping"})
             print(f"Sent ping to user {user_id}")
             # wait for main reader to set the event
-            await asyncio.wait_for(event.wait(), timeout=20.0)
+            await asyncio.wait_for(event.wait(),timeout=20.0)
             print(f"Pong received from user {user_id}")
             return True
         except asyncio.TimeoutError:
