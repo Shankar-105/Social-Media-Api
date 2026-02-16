@@ -282,3 +282,351 @@ curl -X PATCH http://localhost:8000/me/updateInfo \
 ```
 
 ---
+### 6. Get Posts I Voted On
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /me/votedOnPosts` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Lists all posts you have voted (liked or disliked) on. |
+
+**Response — `200 OK`:**
+```json
+{
+  "john_doe you have voted on posts": [
+    {
+      "post title": "Amazing sunset",
+      "post id": "3",
+      "post owner": "jane_doe"
+    }
+  ]
+}
+```
+
+---
+
+### 7. Get My Vote Stats
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /me/voteStats` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | See how many posts you've liked vs disliked. |
+
+**Response — `200 OK`:**
+```json
+{
+  "liked_posts_count": 15,
+  "disliked_posts_count": 3
+}
+```
+
+---
+
+### 8. Get My Liked Posts
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /me/likedPosts` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Lists all posts you have liked. |
+
+**Response — `200 OK`:**
+```json
+{
+  "john_doe your liked posts includes": [
+    { "post id": 3, "post owner": "jane_doe" },
+    { "post id": 7, "post owner": "alice" }
+  ]
+}
+```
+
+---
+
+### 9. Get My Disliked Posts
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /me/dislikedPosts` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Lists all posts you have disliked. |
+
+**Response — `200 OK`:**
+```json
+{
+  "john_doe your disliked posts includes": [
+    { "post id": 5, "post owner": "bob" }
+  ]
+}
+```
+
+---
+
+### 10. Get Posts I Commented On
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /me/commented-on` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Lists all unique posts you've commented on. |
+
+**Response — `200 OK`:**
+```json
+{
+  "john_doe you have commented on posts": [
+    {
+      "post title": "Check this out",
+      "post id": "4",
+      "post owner": "alice"
+    }
+  ]
+}
+```
+
+---
+
+### 11. Get My Comment Stats
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /me/comment-stats` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Get the total number of comments you've made and unique posts commented on. |
+
+**Response — `200 OK`:**
+```json
+{
+  "total_comments": 42,
+  "unique_posts_commented": 18
+}
+```
+
+---
+
+## 👥 Users
+
+### 1. Get All Users
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /users/getAllUsers` |
+| **Auth** | 🌐 None |
+| **Description** | Retrieve a list of all registered users. |
+
+**Response — `201 Created`:**
+```json
+[
+  {
+    "id": 1,
+    "username": "john_doe",
+    "created_at": "2026-02-09T10:30:00.000Z"
+  },
+  {
+    "id": 2,
+    "username": "jane_doe",
+    "created_at": "2026-02-09T11:00:00.000Z"
+  }
+]
+```
+
+---
+
+### 2. Get User Profile
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /users/{user_id}/profile` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | View another user's profile. Includes `is_following` status. |
+
+**Response — `200 OK`:**
+```json
+{
+  "id": 2,
+  "username": "jane_doe",
+  "nickname": "Jane",
+  "bio": "Photographer 📸",
+  "profile_picture": "jane_avatar.png",
+  "posts_count": 10,
+  "followers_count": 50,
+  "following_count": 30,
+  "is_following": true,
+  "created_at": "2026-02-09T11:00:00.000Z"
+}
+```
+
+---
+
+### 3. Get User Profile Picture
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /users/{user_id}/profile/pic` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Get the profile picture URL of a specific user. |
+
+**Response — `200 OK`:**
+```json
+{
+  "url": "http://localhost:8000/profilepics/jane_avatar.png",
+  "type": "image"
+}
+```
+
+---
+
+### 4. Get User's Posts
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /users/{user_id}/posts` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Retrieve a specific user's posts with pagination. |
+
+**Query Parameters:**
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `limit` | int | `10` | 1–100 |
+| `offset` | int | `0` | Skip N posts |
+
+**Response — `200 OK`:** Same structure as `GET /me/posts`.
+
+---
+
+### 5. Get User's Followers
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /users/{user_id}/followers` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | List all followers of a specific user. |
+
+**Response — `200 OK`:**
+```json
+[
+  {
+    "id": 1,
+    "username": "john_doe",
+    "nickname": "Johnny",
+    "profile_pic": "john_avatar.png",
+    "is_following": false
+  }
+]
+```
+
+---
+
+### 6. Get User's Following
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /users/{user_id}/following` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | List all users a specific user is following. |
+
+**Response — `200 OK`:** Same structure as followers list.
+
+---
+
+## 📝 Posts
+
+### 1. Create Post
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /posts/createPost` |
+| **Auth** | 🔐 Bearer Token |
+| **Content-Type** | `multipart/form-data` |
+| **Description** | Create a new post with text and optional media (image/video). |
+
+**Form Fields:**
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `title` | string | ✅ | Post title |
+| `content` | string | ✅ | Post body text |
+| `media` | file | ❌ | JPEG, PNG, or MP4 only |
+
+**cURL Example:**
+```bash
+curl -X POST http://localhost:8000/posts/createPost \
+  -H "Authorization: Bearer <token>" \
+  -F "title=My first post" \
+  -F "content=Hello world!" \
+  -F "media=@/path/to/photo.jpg"
+```
+
+**Response — `201 Created`:**
+```json
+{
+  "id": 1,
+  "title": "My first post",
+  "content": "Hello world!",
+  "media_url": "http://localhost:8000/posts_media/abc123.jpg",
+  "media_type": "image",
+  "likes": 0,
+  "dislikes": 0,
+  "views": 0,
+  "comments_count": 0,
+  "enable_comments": true,
+  "hashtags": null,
+  "created_at": "2026-02-09T12:00:00.000Z",
+  "owner": {
+    "id": 1,
+    "username": "john_doe",
+    "nickname": "Johnny",
+    "profile_pic": null
+  }
+}
+```
+
+---
+
+### 2. Get Post by ID
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /posts/getPost/{postId}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Get full details of a specific post. Increments the view counter on first view. |
+
+**Response — `200 OK`:** Full `PostDetailResponse` (same structure as create post response, plus `is_liked` field).
+
+---
+
+### 3. Edit Post
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `PUT /posts/editPost/{postId}` |
+| **Auth** | 🔐 Bearer Token |
+| **Content-Type** | `application/json` |
+| **Description** | Update the title, content, or other fields of your post. Only the post owner can edit. |
+
+**Request Body (all fields optional):**
+```json
+{
+  "title": "Updated title",
+  "content": "Updated content"
+}
+```
+
+**Response — `200 OK`:** Full `PostDetailResponse` with updated data.
+
+---
+
+### 4. Delete Post
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `DELETE /posts/deletePost/{postId}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Permanently delete your post and its associated media file. |
+
+**Response — `200 OK`:**
+```json
+{
+  "message": "Post 1 deleted successfully"
+}
+```
+
+---
