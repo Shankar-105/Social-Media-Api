@@ -630,3 +630,418 @@ curl -X POST http://localhost:8000/posts/createPost \
 ```
 
 ---
+## 💬 Comments
+
+### 1. Create Comment
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /comment` |
+| **Auth** | 🔐 Bearer Token |
+| **Content-Type** | `application/json` |
+| **Description** | Add a comment to a post (if comments are enabled on that post). |
+
+**Request Body:**
+```json
+{
+  "post_id": 1,
+  "content": "Great post!"
+}
+```
+
+**Response — `201 Created`:**
+```json
+{
+  "id": 1,
+  "post_id": 1,
+  "content": "Great post!",
+  "likes": 0,
+  "created_at": "2026-02-09T13:00:00.000Z",
+  "user": {
+    "id": 1,
+    "username": "john_doe",
+    "nickname": "Johnny",
+    "profile_pic": null
+  }
+}
+```
+
+---
+
+### 2. Get Comments on a Post
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /comments-on/{post_id}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Retrieve paginated comments on a specific post. |
+
+**Query Parameters:**
+| Param | Type | Default |
+|-------|------|---------|
+| `limit` | int | `10` |
+| `offset` | int | `0` |
+
+**Response — `200 OK`:**
+```json
+{
+  "comments": [
+    {
+      "id": 1,
+      "post_id": 1,
+      "content": "Great post!",
+      "likes": 3,
+      "created_at": "2026-02-09T13:00:00.000Z",
+      "user": {
+        "id": 2,
+        "username": "jane_doe",
+        "nickname": "Jane",
+        "profile_pic": null
+      }
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "limit": 10,
+    "offset": 0,
+    "has_more": false
+  }
+}
+```
+
+---
+
+### 3. Edit Comment
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `PATCH /comments/edit_comment/{comment_id}` |
+| **Auth** | 🔐 Bearer Token |
+| **Content-Type** | `application/json` |
+| **Description** | Edit the content of your comment. |
+
+**Request Body:**
+```json
+{
+  "comment_content": "Updated comment text"
+}
+```
+
+**Response — `200 OK`:** Full `CommentDetailResponse`.
+
+---
+
+### 4. Delete Comment
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `DELETE /comments/delete_comment/{comment_id}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Delete your comment. |
+
+**Response — `200 OK`:**
+```json
+{
+  "message": "Comment 1 deleted successfully"
+}
+```
+
+---
+
+## 👍 Votes / Likes
+
+### 1. Vote on a Post
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /vote/on_post` |
+| **Auth** | 🔐 Bearer Token |
+| **Content-Type** | `application/json` |
+| **Description** | Like or dislike a post. Acts as a toggle — same vote again removes it, different vote switches it. |
+
+**Request Body:**
+```json
+{
+  "post_id": 1,
+  "choice": true
+}
+```
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `post_id` | int | The post to vote on |
+| `choice` | bool | `true` = like, `false` = dislike |
+
+**Response — `201 Created`:**
+```json
+{
+  "message": "New vote added successfully",
+  "likes": 6,
+  "dislikes": 1
+}
+```
+
+> **Toggle behavior:**
+> - Vote the same way again → vote removed (`"Vote removed successfully"`)
+> - Vote the opposite way → vote switched (`"Vote switched successfully"`)
+
+---
+
+### 2. Vote on a Comment
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /vote/on_comment` |
+| **Auth** | 🔐 Bearer Token |
+| **Content-Type** | `application/json` |
+| **Description** | Like a comment. Toggle same choice to remove the like. |
+
+**Request Body:**
+```json
+{
+  "comment_id": 1,
+  "choice": true
+}
+```
+
+**Response — `201 Created`:**
+```json
+{
+  "message": "New vote added successfully",
+  "likes": 4
+}
+```
+
+---
+
+## 🔗 Connections (Follow/Unfollow)
+
+### 1. Follow a User
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /follow/{user_id}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Follow a user. Cannot follow yourself. |
+
+**Response — `201 Created`:**
+```json
+{
+  "message": "Followed user jane_doe",
+  "following_count": 9
+}
+```
+
+---
+
+### 2. Unfollow a User
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `DELETE /unfollow/{user_id}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Unfollow a user you're currently following. |
+
+**Response — `200 OK`:**
+```json
+{
+  "message": "Unfollowed user jane_doe",
+  "following_count": 8
+}
+```
+
+---
+
+### 3. Remove a Follower
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `DELETE /remove_follower/{user_id}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Remove someone from your followers list (they stop following you). |
+
+**Response — `200 OK`:**
+```json
+{
+  "message": "Removed follower bob",
+  "following_count": 8
+}
+```
+
+---
+
+## 📰 Feed
+
+### 1. Home Feed
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /feed/home` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Get posts from users you follow, most recent first. |
+
+**Query Parameters:**
+| Param | Type | Default |
+|-------|------|---------|
+| `limit` | int | `10` |
+| `offset` | int | `0` |
+
+**Response — `200 OK`:**
+```json
+{
+  "feed": [
+    {
+      "post_id": 5,
+      "post": {
+        "id": 5,
+        "title": "Sunset vibes 🌅",
+        "media_url": "http://localhost:8000/posts_media/sunset.jpg",
+        "media_type": "image",
+        "likes": 12,
+        "comments_count": 3,
+        "created_at": "2026-02-09T18:00:00.000Z",
+        "is_liked": true
+      },
+      "owner": {
+        "id": 2,
+        "username": "jane_doe",
+        "profile_pic": "jane_avatar.png"
+      }
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### 2. Explore Feed
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /feed/explore` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Discover all posts on the platform, most recent first. |
+
+**Query Parameters:**
+| Param | Type | Default |
+|-------|------|---------|
+| `limit` | int | `20` |
+| `offset` | int | `0` |
+
+**Response — `200 OK`:** Same paginated `PostListResponse` structure as `GET /me/posts`.
+
+---
+
+## 🔍 Search
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /search` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Search for users by username **or** posts by hashtag (`#tag`). |
+
+**Query Parameters:**
+| Param | Type | Required | Notes |
+|-------|------|----------|-------|
+| `q` | string | ✅ | Search query. Prefix with `#` for hashtag search. |
+| `limit` | int | ❌ | Default `10` |
+| `offset` | int | ❌ | Default `0` |
+| `orderBy` | string | ❌ | Use `"likes"` to sort hashtag results by likes |
+
+**Example — Search users:**
+```bash
+curl -H "Authorization: Bearer <token>" \
+  "http://localhost:8000/search?q=john"
+```
+
+**Response (user search) — `202 Accepted`:**
+```json
+{
+  "result_type": "users",
+  "users": [
+    {
+      "id": 1,
+      "username": "john_doe",
+      "nickname": "Johnny",
+      "profile_pic": null
+    }
+  ],
+  "total": 1
+}
+```
+
+**Example — Search hashtags:**
+```bash
+curl -H "Authorization: Bearer <token>" \
+  "http://localhost:8000/search?q=%23sunset"
+```
+
+**Response (hashtag search) — `202 Accepted`:**
+```json
+{
+  "result_type": "posts",
+  "posts": [
+    {
+      "id": 5,
+      "title": "Sunset vibes 🌅",
+      "media_url": "http://localhost:8000/posts_media/sunset.jpg",
+      "media_type": "image",
+      "likes": 12,
+      "comments_count": 3,
+      "created_at": "2026-02-09T18:00:00.000Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+## 🔒 Password Management
+
+### 1. Request OTP (Initiate Password Change)
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /change-password` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Sends a one-time password (OTP) to your registered email. Required before resetting your password. |
+
+**Response — `200 OK`:**
+```json
+{
+  "message": "OTP sent to your email! Check inbox"
+}
+```
+
+> ⚠️ Requires a valid Gmail + App Password configured in `.env` (see SETUP.md).
+
+---
+
+### 2. Reset Password (with OTP)
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /reset-password` |
+| **Auth** | 🔐 Bearer Token |
+| **Content-Type** | `application/json` |
+| **Description** | Change your password after verifying the OTP sent to your email. |
+
+**Request Body:**
+```json
+{
+  "old_password": "currentPass123",
+  "new_password": "brandNewPass456",
+  "otp": "123456"
+}
+```
+
+**Response — `200 OK`:**
+```json
+{
+  "message": "Password changed successfully! Now login with new one."
+}
+```
+
+---
