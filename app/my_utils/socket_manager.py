@@ -85,7 +85,7 @@ class ConnectionManager:
             await ws.send_json({"type": "ping"})
             print(f"Sent ping to user {user_id}")
             # wait for main reader to set the event
-            await asyncio.wait_for(event.wait(),timeout=20.0)
+            await asyncio.wait_for(event.wait(),timeout=2000.0)
             print(f"Pong received from user {user_id}")
             return True
         except asyncio.TimeoutError:

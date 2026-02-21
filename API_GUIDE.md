@@ -1045,3 +1045,556 @@ curl -H "Authorization: Bearer <token>" \
 ```
 
 ---
+## 📤 Chat — Share Posts
+
+### 1. Share a Post into DMs
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /share` |
+| **Auth** | 🔐 Bearer Token |
+| **Content-Type** | `application/json` |
+| **Description** | Share a post to another user via direct message. The receiver gets a real-time notification if online. |
+
+**Request Body:**
+```json
+{
+  "post_id": 5,
+  "to_user_id": 2,
+  "message": "Check out this post!"
+}
+```
+
+**Response — `200 OK`:** Returns the full `SharedPostDetailResponse` with the shared post details.
+
+---
+
+## 📎 Chat — Media Upload
+
+### 1. Upload Chat Media
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /upload-media` |
+| **Auth** | 🔐 Bearer Token |
+| **Content-Type** | `multipart/form-data` |
+| **Description** | Upload an image, video, or audio file for use in chat messages. Returns a `media_url` to include when sending a message via WebSocket. |
+
+**Form Fields:**
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `file` | file | ✅ | Image, video, or audio file |
+
+**cURL Example:**
+```bash
+curl -X POST http://localhost:8000/upload-media \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@/path/to/image.jpg"
+```
+
+**Response — `200 OK`:**
+```json
+{
+  "media_url": "/images/a1b2c3d4.jpg",
+  "type": "image"
+}
+```
+
+> 💡 Use the returned `media_url` and `type` when sending media messages over WebSocket.
+
+---
+
+## ℹ️ Chat — Message Info & Reactions
+
+### 1. Get Message Info
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /msgs/{msg_id}/info` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Get delivery and read status of a specific message. Only the sender or receiver can access this. |
+
+**Response — `200 OK`:**
+```json
+{
+  "message_id": 42,
+  "delivered_at": "2 min ago",
+  "read_at": "1 min ago",
+  "is_read": true
+}
+```
+
+---
+
+### 2. Get Message Reactions
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /msgs/{msg_id}/msg_reaction_info` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Get the list of users who reacted to a specific message and their reactions. |
+
+**Response — `200 OK`:**
+```json
+[
+  {
+    "user_id": 2,
+    "username": "jane_doe",
+    "profile_pic": "jane_avatar.png",
+    "reaction": "❤️"
+  }
+]
+```
+
+---
+
+### 3. Get Shared Post Reactions
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /shared/{shared_id}/reactions` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Get reaction details for a shared post. Only sender or receiver of the share can view. |
+
+**Response — `200 OK`:** Same structure as message reactions.
+
+---
+
+## 🗑️ Chat — Delete & Clear
+
+### 1. Delete Message for Me
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /delete/for-me/{msg_id}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Hides a message from your view only. The other person can still see it. |
+
+**Response — `200 OK`:**
+```json
+{
+  "message_id": 42,
+  "detail": "Deleted for you"
+}
+```
+
+---
+
+### 2. Delete Shared Post for Me
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /delete-share/for-me/{share_id}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Hides a shared post from your view only. |
+
+**Response — `200 OK`:**
+```json
+{
+  "share_id": 10,
+  "detail": "Deleted for you"
+}
+```
+
+---
+
+### 3. Clear Entire Chat
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `DELETE /clear-chat/{friend_id}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Clears all visible messages in a conversation from your view. Messages remain visible to the other person. |
+
+**Response — `200 OK`:**
+```json
+{
+  "detail": "Chat cleared successfully"
+}
+```
+
+---
+
+## ✏️ Chat — Edit Messages
+
+### 1. Check If Message Is Editable
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /msg/{msg_id}/can_edit` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Check whether a message can still be edited. Messages can only be edited within a configured time window (default: 15 minutes) after sending. |
+
+**Response — `200 OK`:**
+```json
+{
+  "can_edit": true,
+  "message": null
+}
+```
+
+> If the time window has passed:
+> ```json
+> { "can_edit": false, "message": null }
+> ```
+
+---
+
+## 📜 Chat — History
+
+### 1. Get Chat History
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /chat/history/{friend_id}` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Retrieve the full conversation history with a friend — both messages and shared posts, excluding deleted items. |
+
+**Response — `200 OK`:**
+Returns a combined list of messages and shared posts, sorted by timestamp. Each item includes:
+
+**Message item:**
+```json
+{
+  "type": "message",
+  "id": 42,
+  "content": "Hey! How are you?",
+  "sender_id": 1,
+  "receiver_id": 2,
+  "media_type": null,
+  "media_url": null,
+  "timestamp": "5 min ago",
+  "is_edited": false,
+  "reaction_count": 1,
+  "reactions": "❤️",
+  "is_read": true,
+  "is_reply": false
+}
+```
+
+**Shared post item:**
+```json
+{
+  "type": "shared_post",
+  "shared_id": 10,
+  "post_id": 5,
+  "title": "Sunset vibes 🌅",
+  "from_user_id": 1,
+  "to_user_id": 2,
+  "media_type": "image",
+  "media_url": "sunset.jpg",
+  "sender_id": 1,
+  "message": "Look at this!",
+  "reactions": "🔥",
+  "timestamp": "10 min ago"
+}
+```
+
+> Reply messages include `is_reply: true` and a `reply_to` object with the original message or shared post details.
+
+---
+
+## ⚡ WebSocket — Real-Time Chat
+
+The heart of the chat system. All real-time features (messaging, typing indicators, reactions, edits, deletes) flow through a single WebSocket connection.
+
+### Connecting
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `ws://localhost:8000/chat/ws/{user_id}?token=<your_jwt_token>` |
+| **Protocol** | WebSocket |
+| **Auth** | JWT token passed as query parameter |
+| **Description** | Opens a persistent real-time connection. On connect, any missed (unread) messages and shared posts are automatically delivered. |
+
+**Example — Postman:**
+1. Open a new **WebSocket Request** tab.
+2. Enter: `ws://localhost:8000/chat/ws/1?token=<your_access_token>`
+3. Click **Connect**.
+
+**Example — JavaScript:**
+```javascript
+const ws = new WebSocket("ws://localhost:8000/chat/ws/1?token=YOUR_JWT_TOKEN");
+
+ws.onopen = () => console.log("Connected!");
+ws.onmessage = (event) => console.log("Received:", JSON.parse(event.data));
+ws.onclose = () => console.log("Disconnected");
+```
+
+> ⚠️ The `user_id` in the URL **must match** the user ID encoded in the JWT token. Mismatches are rejected.
+
+---
+
+### Message Types — Sending
+
+All messages are sent as **JSON strings** through the WebSocket. The `type` field determines the action.
+
+#### 1. Send a Direct Message (Text or Media)
+
+```json
+{
+  "to": 2,
+  "content": "Hello Jane!",
+  "media_url": null,
+  "media_type": null
+}
+```
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `to` | int | Receiver's user ID |
+| `content` | string | Message text |
+| `media_url` | string/null | URL from `/upload-media` (if sending media) |
+| `media_type` | string/null | `"image"`, `"video"`, `"audio"`, or `null` |
+
+> 📌 No `type` field needed — a message without a `type` is treated as a regular DM.
+
+---
+
+#### 2. Reply to a Message
+
+```json
+{
+  "type": "reply_message",
+  "to": 2,
+  "content": "I agree!",
+  "reply_msg_id": 42,
+  "media_url": null,
+  "media_type": null
+}
+```
+
+---
+
+#### 3. Reply to a Shared Post
+
+```json
+{
+  "type": "reply_to_share",
+  "to": 2,
+  "content": "This post is amazing!",
+  "reply_share_id": 10,
+  "media_url": null,
+  "media_type": null
+}
+```
+
+---
+
+#### 4. Edit a Message
+
+```json
+{
+  "type": "edit_message",
+  "msg_id": 42,
+  "new_content": "Updated message text",
+  "receiver_id": 2
+}
+```
+
+> ⏱️ Editing is only allowed within the configured time window (default: 15 min). Use `GET /msg/{msg_id}/can_edit` to check.
+
+---
+
+#### 5. Delete Message for Everyone
+
+```json
+{
+  "type": "delete_for_everyone",
+  "message_id": 42,
+  "receiver_id": 2
+}
+```
+
+> Only the **sender** can delete for everyone. Both parties receive instant notification.
+
+---
+
+#### 6. Delete Shared Post for Everyone
+
+```json
+{
+  "type": "delete_share_for_everyone",
+  "message_id": 10,
+  "receiver_id": 2
+}
+```
+
+---
+
+#### 7. React to a Message (Emoji)
+
+```json
+{
+  "type": "reaction",
+  "message_id": 42,
+  "reaction": "❤️"
+}
+```
+
+> **Toggle behavior:** Sending the same emoji again removes the reaction. Sending a different emoji switches it.
+
+---
+
+#### 8. React to a Shared Post
+
+```json
+{
+  "type": "shared_post_reaction",
+  "shared_post_id": 10,
+  "reaction": "🔥"
+}
+```
+
+---
+
+#### 9. Typing Indicator
+
+```json
+{
+  "type": "typing",
+  "receiver_id": 2,
+  "is_typing": true
+}
+```
+
+> Send `is_typing: false` when the user stops typing.
+
+---
+
+#### 10. Read Receipt
+
+```json
+{
+  "type": "read_receipt",
+  "sender_id": 2
+}
+```
+
+> Marks **all** unread messages from `sender_id` as read. The sender receives a real-time notification.
+
+---
+
+#### 11. Pong (Heartbeat Response)
+
+```json
+{
+  "type": "pong"
+}
+```
+
+> The server sends periodic `ping` messages. Respond with `pong` to signal you're still connected. Failure to respond may result in disconnection (zombie detection).
+
+---
+
+### Message Types — Receiving
+
+You will receive various event payloads from the server:
+
+| Event Type | Description |
+|------------|-------------|
+| Regular message | `{ "id", "content", "sender_id", "timestamp", "is_reply": false, ... }` |
+| Reply message | Same as above with `"is_reply": true` + `"reply_to": { ... }` |
+| `edit_message` | `{ "type": "edit_message", "message_id", "new_content", "is_edited" }` |
+| `delete_message` | `{ "type": "delete_message", "message_id", "is_deleted_for_everyone": true }` |
+| `reaction` | `{ "type": "reaction", "message_id", "reaction", "reaction_count", "reacted_by" }` |
+| `reaction_update` | `{ "type": "reaction_update", "data": { ... } }` — for shared post reactions |
+| `shared_post` | `{ "type": "shared_post", "shared_id", "post_id", "title", ... }` |
+| `share_deleted` | `{ "type": "share_deleted", "share_id", "is_deleted_for_everyone": true }` |
+| `typing` | `{ "type": "typing", "is_typing": true/false }` |
+| `read_receipt` | `{ "type": "read_receipt", "reader_id", "read_at", ... }` |
+| `ping` | Server heartbeat — respond with `{ "type": "pong" }` |
+
+---
+
+## 📊 Quick Reference — All Endpoints at a Glance
+
+### REST API Endpoints
+
+| # | Method | Endpoint | Auth | Description |
+|---|--------|----------|------|-------------|
+| 1 | `GET` | `/health` | 🌐 | Health check |
+| 2 | `POST` | `/user/signup` | 🌐 | Register new user |
+| 3 | `POST` | `/login` | 🌐 | Log in, get JWT |
+| 4 | `GET` | `/users/getAllUsers` | 🌐 | List all users |
+| 5 | `GET` | `/users/{id}/profile` | 🔐 | View user profile |
+| 6 | `GET` | `/users/{id}/profile/pic` | 🔐 | Get user's profile pic |
+| 7 | `GET` | `/users/{id}/posts` | 🔐 | Get user's posts |
+| 8 | `GET` | `/users/{id}/followers` | 🔐 | List user's followers |
+| 9 | `GET` | `/users/{id}/following` | 🔐 | List user's following |
+| 10 | `GET` | `/me/profile` | 🔐 | My profile |
+| 11 | `GET` | `/me/profile/pic` | 🔐 | My profile picture |
+| 12 | `DELETE` | `/me/profilepic/delete` | 🔐 | Remove my profile pic |
+| 13 | `PATCH` | `/me/updateInfo` | 🔐 | Update my info |
+| 14 | `GET` | `/me/posts` | 🔐 | My posts (paginated) |
+| 15 | `GET` | `/me/votedOnPosts` | 🔐 | Posts I voted on |
+| 16 | `GET` | `/me/voteStats` | 🔐 | My vote statistics |
+| 17 | `GET` | `/me/likedPosts` | 🔐 | Posts I liked |
+| 18 | `GET` | `/me/dislikedPosts` | 🔐 | Posts I disliked |
+| 19 | `GET` | `/me/commented-on` | 🔐 | Posts I commented on |
+| 20 | `GET` | `/me/comment-stats` | 🔐 | My comment statistics |
+| 21 | `POST` | `/posts/createPost` | 🔐 | Create post |
+| 22 | `GET` | `/posts/getPost/{id}` | 🔐 | Get post detail |
+| 23 | `PUT` | `/posts/editPost/{id}` | 🔐 | Edit post |
+| 24 | `DELETE` | `/posts/deletePost/{id}` | 🔐 | Delete post |
+| 25 | `POST` | `/comment` | 🔐 | Create comment |
+| 26 | `GET` | `/comments-on/{post_id}` | 🔐 | Get comments on post |
+| 27 | `PATCH` | `/comments/edit_comment/{id}` | 🔐 | Edit comment |
+| 28 | `DELETE` | `/comments/delete_comment/{id}` | 🔐 | Delete comment |
+| 29 | `POST` | `/vote/on_post` | 🔐 | Vote on post |
+| 30 | `POST` | `/vote/on_comment` | 🔐 | Vote on comment |
+| 31 | `POST` | `/follow/{user_id}` | 🔐 | Follow user |
+| 32 | `DELETE` | `/unfollow/{user_id}` | 🔐 | Unfollow user |
+| 33 | `DELETE` | `/remove_follower/{user_id}` | 🔐 | Remove follower |
+| 34 | `GET` | `/feed/home` | 🔐 | Home feed |
+| 35 | `GET` | `/feed/explore` | 🔐 | Explore feed |
+| 36 | `GET` | `/search` | 🔐 | Search users/hashtags |
+| 37 | `POST` | `/change-password` | 🔐 | Request password OTP |
+| 38 | `POST` | `/reset-password` | 🔐 | Reset password with OTP |
+| 39 | `POST` | `/share` | 🔐 | Share post to DM |
+| 40 | `POST` | `/upload-media` | 🔐 | Upload chat media |
+| 41 | `GET` | `/chat/history/{friend_id}` | 🔐 | Chat history |
+| 42 | `GET` | `/msgs/{msg_id}/info` | 🔐 | Message delivery info |
+| 43 | `GET` | `/msgs/{msg_id}/msg_reaction_info` | 🔐 | Message reactions |
+| 44 | `GET` | `/shared/{id}/reactions` | 🔐 | Shared post reactions |
+| 45 | `POST` | `/delete/for-me/{msg_id}` | 🔐 | Delete message for me |
+| 46 | `POST` | `/delete-share/for-me/{id}` | 🔐 | Delete share for me |
+| 47 | `DELETE` | `/clear-chat/{friend_id}` | 🔐 | Clear chat |
+| 48 | `GET` | `/msg/{msg_id}/can_edit` | 🔐 | Check edit eligibility |
+
+### WebSocket Endpoint
+
+| # | Protocol | Endpoint | Auth | Description |
+|---|----------|----------|------|-------------|
+| 1 | `WS` | `/chat/ws/{user_id}?token=<jwt>` | 🔐 | Real-time chat connection |
+
+### WebSocket Message Types (Send)
+
+| # | Type | Description |
+|---|------|-------------|
+| 1 | *(no type)* | Send direct message |
+| 2 | `reply_message` | Reply to a message |
+| 3 | `reply_to_share` | Reply to a shared post |
+| 4 | `edit_message` | Edit a sent message |
+| 5 | `delete_for_everyone` | Delete message for everyone |
+| 6 | `delete_share_for_everyone` | Delete shared post for everyone |
+| 7 | `reaction` | React to a message (emoji) |
+| 8 | `shared_post_reaction` | React to a shared post |
+| 9 | `typing` | Typing indicator |
+| 10 | `read_receipt` | Mark messages as read |
+| 11 | `pong` | Heartbeat response |
+
+---
+
+## 💡 Tips & Troubleshooting
+
+- **Getting `401 Unauthorized`?** Your token may have expired. Log in again to get a fresh token.
+- **Getting `404 Not Found` for media?** Ensure the Docker volumes are mounted and the folders (`profilepics/`, `posts_media/`, `chat-media/`) exist.
+- **WebSocket disconnecting?** Make sure to respond to `ping` messages with `pong` to avoid zombie detection.
+- **Swagger UI** at `http://localhost:8000/docs` is the fastest way to test REST endpoints — it handles auth and request formatting for you.
+- **For WebSocket testing**, use **Postman** (WebSocket tab), the **[websocat](https://github.com/nickel-org/websocat)** CLI tool, or the browser DevTools console.
+- **Rate limits on edit**: Message editing is time-limited (default 15 minutes). Always check `/msg/{msg_id}/can_edit` first.
+
+---
+
+> Built with ❤️ using FastAPI, SQLAlchemy, PostgreSQL & WebSockets
