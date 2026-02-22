@@ -37,7 +37,6 @@ redis_client = redis.Redis(
     decode_responses=True       # ← very important for convenience
 )
 
-
 # 2. HELPER FUNCTIONS
 
 def ping_redis() -> bool:
@@ -52,7 +51,6 @@ def ping_redis() -> bool:
         return redis_client.ping()   # → True
     except redis.ConnectionError:
         return False
-
 
 def set_cache(key:str,value: Any,ttl:int = 60) -> None:
     """
@@ -99,7 +97,6 @@ def get_cache(key: str) -> Optional[Any]:
 def delete_cache(key: str) -> None:
     """
     Remove a specific key from Redis (invalidate the cache).
-    
     Call this when the underlying data changes, e.g. after a user 
     updates their profile, so the next request fetches fresh data.
     """

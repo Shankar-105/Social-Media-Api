@@ -9,6 +9,7 @@ from app.redis_service import get_cache, set_cache, delete_cache
 router=APIRouter(
     tags=['Users']
 )
+
 @router.get("/users/{user_id}/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfileResponse)
 def userProfile(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # Check Redis cache first 
@@ -69,7 +70,7 @@ def createUser(userData:sch.UserSignupRequest=Body(...),db:Session=Depends(db.ge
     db.add(newUser)
     db.commit()
     db.refresh(newUser)
-    # ── Invalidate the all_users cache because a new user was added ──
+    # Invalidate the all_users cache because a new user was added
     delete_cache("all_users")
     return newUser
 
