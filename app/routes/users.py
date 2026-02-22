@@ -5,17 +5,27 @@ from app import models,db,oauth2
 from sqlalchemy.orm import Session
 import app.my_utils.utils as utils
 import os
+from app.redis_service import get_cache, set_cache, delete_cache
 router=APIRouter(
     tags=['Users']
 )
 @router.get("/users/{user_id}/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfileResponse)
 def userProfile(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    # Check Redis cache first 
+    cache_key = f"user_profile:{user_id}"
+    cached = get_cache(cache_key)
+    if cached:
+        # Cache HIT → return the cached dict directly (FastAPI serializes it)
+        cached["is_following"] = user_id in [u.id for u in currentUser.following]
+        return cached
+
+    # Cache MISS → query the database
     user=db.query(models.User).filter(models.User.id==user_id).first()
     
     # Check if current user follows this user
     is_following = user in currentUser.following
     
-    return sch.UserProfileResponse(
+    result = sch.UserProfileResponse(
         id=user.id,
         username=user.username,
         nickname=user.nickname,
@@ -27,6 +37,10 @@ def userProfile(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User
         is_following=is_following,
         created_at=user.created_at
     )
+
+    #  Store in Redis for 120 seconds
+    set_cache(cache_key, result.model_dump(mode="json"), ttl=120)
+    return result
 
 @router.get("/users/{user_id}/profile/pic",status_code=status.HTTP_200_OK, response_model=sch.MediaInfo)
 def myProfilePicture(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
@@ -55,11 +69,24 @@ def createUser(userData:sch.UserSignupRequest=Body(...),db:Session=Depends(db.ge
     db.add(newUser)
     db.commit()
     db.refresh(newUser)
+    # ── Invalidate the all_users cache because a new user was added ──
+    delete_cache("all_users")
     return newUser
 
 @router.get("/users/getAllUsers",status_code=status.HTTP_201_CREATED,response_model=List[sch.UserResponse])
 def getAllUsers(db:Session=Depends(db.getDb)):
+    # Check the cache first
+    cached = get_cache("all_users")
+    if cached:
+        return cached   # cache HIT
+
+    #  Cache MISS → hit DB
     allUsers=db.query(models.User).all()
+
+    # Build serializable list & cache it for 60 seconds
+    users_data = [sch.UserResponse.model_validate(u).model_dump(mode="json") for u in allUsers]
+    set_cache("all_users", users_data, ttl=60)
+
     return allUsers
 
 @router.get("/users/{user_id}/followers",status_code=status.HTTP_200_OK, response_model=List[sch.UserBasicResponse])
