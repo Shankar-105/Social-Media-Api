@@ -5,6 +5,7 @@ services: # all the current services
       - "8000:8000"  # mapping localhost:8000 to container's 8000
     depends_on:
       - db  # Starts DB first
+      - redis  # Starts Redis first
     volumes:
     # for dev purposes whenever the code is changed either
     # while the containers are running or when the containers are stopped 
@@ -15,6 +16,9 @@ services: # all the current services
       - .:/code 
     environment:
       - DATABASE_HOST=db  # here inside the containers the api and the db communincation is via this 'db'
+      - REDIS_HOST=redis  # inside Docker, services talk to each other by service name
+      - REDIS_PORT=6379
+      - REDIS_DB=0
     restart: unless-stopped  # Auto-restart if it crashes no compose up's needed again and again
 
   db:
@@ -27,6 +31,12 @@ services: # all the current services
       - postgres_data:/var/lib/postgresql/data  # volumes persist data rather then erasing data on every restart
     ports:
       - "5432:5432"  
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
 
 volumes:
   postgres_data:  # named volume for DB data—survives restarts
