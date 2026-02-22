@@ -11,11 +11,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 models.Base.metadata.create_all(bind=engine)
 
-# verify Redis is reachable at startup
-check_redis_connection()
-
 # fastapi instance
 app = FastAPI()
+
+# verify Redis is reachable at startup
+# placed inside on_event so it runs after the app is fully constructed
+# (avoids firing during 'from app.main import app' in tests/conftest)
+@app.on_event("startup")
+def startup_event():
+    check_redis_connection()
 # tells the uvicorn to render any images at the new paths while displaying profile pics or etc
 # example : without this mount method suppose you hit the see your profile pic endpoint
 # the postman or anyother application returns the url of the profile pic as json

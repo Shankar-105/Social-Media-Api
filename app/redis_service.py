@@ -52,7 +52,7 @@ def ping_redis() -> bool:
     except redis.ConnectionError:
         return False
 
-def set_cache(key:str,value: Any,ttl:int = 60) -> None:
+def set_cache(key: str, value: Any, ttl: int = 60) -> None:
     """
     Store something in Redis.
     Parameters
@@ -72,11 +72,14 @@ def set_cache(key:str,value: Any,ttl:int = 60) -> None:
         After this many seconds Redis auto-deletes it.
         This ensures the cache doesn't serve outdated data forever.
     """
-    # json.dumps  →  Python dict/list  →  JSON string
-    json_value = json.dumps(value)
-    
-    # .setex(key, seconds, value)  →  SET + EXPIRE in one command
-    redis_client.setex(key, ttl, json_value)
+    try:
+        json_value = json.dumps(value)
+        redis_client.setex(key, ttl, json_value)
+    except Exception:
+        # If Redis is down, silently skip caching — the route still works,
+        # it just won't have the speed benefit. Never let cache failures
+        # crash a route with a 500.
+        pass
 
 def get_cache(key: str) -> Optional[Any]:
     """
@@ -86,41 +89,49 @@ def get_cache(key: str) -> Optional[Any]:
     The original Python object (dict/list/etc.) if the key exists,
     or None if the key has expired or was never set.
     """
-    cached = redis_client.get(key)   # → JSON string or None
-    
-    if cached is None:
-        return None                  # cache MISS
-    
-    # json.loads  →  JSON string  →  Python dict/list
-    return json.loads(cached)        # cache HIT
+    try:
+        cached = redis_client.get(key)   # → JSON string or None
+        if cached is None:
+            return None                  # cache MISS
+        return json.loads(cached)        # cache HIT
+    except Exception:
+        # If Redis is unreachable, behave as a cache miss so the route
+        # falls through to the database and still returns a response.
+        return None
 
 def delete_cache(key: str) -> None:
     """
     Remove a specific key from Redis (invalidate the cache).
-    Call this when the underlying data changes, e.g. after a user 
+    Call this when the underlying data changes, e.g. after a user
     updates their profile, so the next request fetches fresh data.
     """
-    redis_client.delete(key)
+    try:
+        redis_client.delete(key)
+    except Exception:
+        pass
 
 def delete_cache_pattern(pattern: str) -> None:
     """
     Remove ALL keys matching a pattern.
     Example:  delete_cache_pattern("user_profile:*")
     This would delete user_profile:1, user_profile:2, etc.
-    
+
     Useful when a change affects many cached items at once,
     e.g. clearing all cached user profiles after a bulk update.
-    
+
     ⚠️  SCAN is used instead of KEYS because KEYS blocks Redis
     on large datasets. SCAN iterates in small batches.
     """
-    cursor = 0
-    while True:
-        cursor, keys = redis_client.scan(cursor=cursor, match=pattern, count=100)
-        if keys:
-            redis_client.delete(*keys)
-        if cursor == 0:
-            break
+    try:
+        cursor = 0
+        while True:
+            cursor, keys = redis_client.scan(cursor=cursor, match=pattern, count=100)
+            if keys:
+                redis_client.delete(*keys)
+            if cursor == 0:
+                break
+    except Exception:
+        pass
 
 #  3. STARTUP CHECK 
 

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 import os,shutil
 from fastapi import UploadFile,File
 from sqlalchemy import and_,distinct,func,case
+from app.redis_service import delete_cache
 
 router=APIRouter(
     tags=['me']
@@ -52,6 +53,8 @@ def removeProfilePicture(db:Session=Depends(db.getDb),currentUser:models.User=De
         os.remove(file_path)
     currentUser.profile_picture=None
     db.commit()
+    # profile changed — bust the cached profile for this user
+    delete_cache(f"user_profile:{currentUser.id}")
     return sch.SuccessResponse(message="Profile picture removed successfully")
 
 # retrives all posts using sqlAlchemy
@@ -138,6 +141,8 @@ def updateUserInfo(username:str=Form(None),bio:str=Form(None),profile_picture:Up
         db.query(models.User).filter(models.User.id==currentUser.id).update(updates)
         db.commit()
         db.refresh(currentUser)
+        # profile changed — bust the cached profile for this user
+        delete_cache(f"user_profile:{currentUser.id}")
     
     # Build proper response
     return sch.UserProfileResponse(

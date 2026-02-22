@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
 from typing import List
+from app.redis_service import delete_cache
 
 router=APIRouter(tags=['connections'])
 
@@ -26,6 +27,9 @@ def follow(user_id:int,db:Session=Depends(getDb),currentUser:models.User=Depends
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to follow user")
+    # follower/following counts changed on both users — invalidate both profiles
+    delete_cache(f"user_profile:{currentUser.id}")
+    delete_cache(f"user_profile:{userToFollow.id}")
     return sch.FollowResponse(message=f"Followed user {userToFollow.username}", following_count=currentUser.following_cnt)
     
 @router.delete("/unfollow/{user_id}",status_code=status.HTTP_200_OK, response_model=sch.FollowResponse)
@@ -43,6 +47,9 @@ def unfollow(user_id:int,db:Session=Depends(getDb),currentUser:models.User=Depen
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to unfollow user")
+    # follower/following counts changed on both users — invalidate both profiles
+    delete_cache(f"user_profile:{currentUser.id}")
+    delete_cache(f"user_profile:{userToUnFollow.id}")
     return sch.FollowResponse(message=f"Unfollowed user {userToUnFollow.username}", following_count=currentUser.following_cnt)
 
 @router.delete("/remove_follower/{user_id}", status_code=status.HTTP_200_OK, response_model=sch.FollowResponse)
@@ -67,7 +74,9 @@ def remove_follower(user_id: int, db: Session = Depends(getDb), currentUser: mod
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to remove follower")
-        
+    # follower/following counts changed on both users — invalidate both profiles
+    delete_cache(f"user_profile:{currentUser.id}")
+    delete_cache(f"user_profile:{userToRemove.id}")
     return sch.FollowResponse(message=f"Removed follower {userToRemove.username}", following_count=currentUser.following_cnt)
 
 @router.get("/users/{user_id}/followers", response_model=List[sch.UserBasicResponse])
