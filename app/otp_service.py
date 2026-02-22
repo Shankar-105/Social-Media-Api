@@ -37,4 +37,4 @@ def checkOtp(db:Session,email:str,user_otp:str) -> bool:
         db.delete(otp_record)
         db.commit()
         return True
-    return False  # or else wrong otp
+    return False  # or else wrong otp 

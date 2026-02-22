@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     media_folder:str
     # maximum edit time
     max_edit_time:int
+    # redis config
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_db: int = 0
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
