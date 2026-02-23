@@ -95,6 +95,16 @@ class TokenModel(BaseModel):
     accessToken: str
     tokenType: str
 
+class ForgotPasswordSchema(BaseModel):
+    """Request schema for forgot password"""
+    email: EmailStr
+
+class ResetPasswordSchema(BaseModel):
+    """Request schema for resetting password with OTP"""
+    email: EmailStr
+    otp: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=6, max_length=72)
+
 # POST SCHEMAS
 
 class PostCreateRequest(BaseModel):

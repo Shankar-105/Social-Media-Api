@@ -146,3 +146,23 @@ def check_redis_connection() -> None:
         print("❌ Redis connection FAILED — caching will not work.")
         print(f"   Tried connecting to {settings.redis_host}:{settings.redis_port}")
         print("   Make sure your Redis server is running (e.g. in WSL: sudo service redis-server start)")
+
+def add_to_blacklist(token: str, ttl: int):
+    """
+    Adds a token to the Redis blacklist.
+    """
+    try:
+        redis_client.setex(f"blacklist:{token}", ttl, "true")
+    except Exception:
+        pass
+
+def is_blacklisted(token: str) -> bool:
+    """
+    Checks if a token is in the Redis blacklist.
+    """
+    try:
+        return redis_client.exists(f"blacklist:{token}") > 0
+    except Exception:
+        # If redis is down, we'll allow the token.
+        # This is a security trade-off. For higher security, you might want to return True.
+        return False

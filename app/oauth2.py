@@ -5,6 +5,8 @@ from fastapi import status,HTTPException,Depends
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer
 from app.config import settings as cg
+from app import redis_service
+
 # a scheme for Extracting the sent JWT token 
 # from the Authorization Header
 oauth2_scheme=OAuth2PasswordBearer(tokenUrl='login')
@@ -35,6 +37,8 @@ def createAccessToken(data:dict):
     return jwtToken
 
 def verifyAccesstoken(token:str,credentials_exception,dbs:Session):
+    if redis_service.is_blacklisted(token):
+        raise credentials_exception
     try:
         # decode's the token which returns a dict of the sent user info 
         # while creating a token (userId,userName) 
