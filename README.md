@@ -13,6 +13,7 @@ Supports file uploads, instant messaging via WebSockets, and everything you need
 ![WebSockets Badge](https://img.shields.io/badge/WebSockets-101010?style=for-the-badge&logo=socket.io&logoColor=white)
 ![JWT Badge](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=JSON%20web%20tokens&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=plastic&logo=docker&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7.0+-red?logo=redis&logoColor=white)
 
 ## 🌟 Features — What’s Inside?
 

@@ -108,6 +108,7 @@ docker compose exec -it api bash
 docker compose exec -it api alembic upgrade head
 ```
 - If Postgres connection errors occur, confirm `.env` values and that `DATABASE_HOST=db` is set. Use `docker compose logs db` to inspect DB startup errors.
+- If Redis connection errors occur, confirm `REDIS_HOST=redis` is set in the api environment. Use `docker compose logs redis` to inspect Redis startup errors.
 - For SMTP/email issues: confirm the app password is correct, and your Gmail account allows SMTP access via App Passwords (2-Step Verification must be enabled).
 </details>
 

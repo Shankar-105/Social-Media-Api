@@ -84,7 +84,15 @@ pip install -r requirements.txt
 > Ensure you have a user with permission to create databases (usually the `postgres` user).
 > The password should match what is defined in your `.env` file (`DATABASE_PASSWORD`).
 
-### **4. Environment Setup**
+### **4. Local Redis Requirement**
+> [!IMPORTANT]
+> **Local Redis running** on `localhost:6379` is mandatory for local tests.
+> On WSL/Ubuntu: `sudo service redis-server start`
+> On macOS (Homebrew): `brew services start redis`
+> Confirm it's up with: `redis-cli ping` — should respond `PONG`.
+> The `.env` defaults (`REDIS_HOST=localhost`, `REDIS_PORT=6379`, `REDIS_DB=0`) match automatically.
+
+### **5. Environment Setup**
 Ensure your `.env` file reflects the local setup:
 - `DATABASE_HOST=localhost`
 - `DATABASE_PORT=5432`

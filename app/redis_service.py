@@ -74,14 +74,14 @@ def set_cache(key: str, value: Any, ttl: int = 60) -> None:
     """
     try:
         json_value = json.dumps(value)
-        redis_client.setex(key, ttl, json_value)
+        redis_client.setex(key,ttl,json_value)
     except Exception:
         # If Redis is down, silently skip caching — the route still works,
         # it just won't have the speed benefit. Never let cache failures
         # crash a route with a 500.
         pass
 
-def get_cache(key: str) -> Optional[Any]:
+def get_cache(key:str) -> Optional[Any]:
     """
     Retrieve something from Redis.
     Returns
