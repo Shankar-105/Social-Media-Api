@@ -2,7 +2,8 @@ from jose import JWTError,jwt
 from datetime import datetime,timedelta
 from app import schemas as sch,models,db
 from fastapi import status,HTTPException,Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from fastapi.security import OAuth2PasswordBearer
 from app.config import settings as cg
 from app import redis_service
@@ -36,8 +37,8 @@ def createAccessToken(data:dict):
     # return the token
     return jwtToken
 
-def verifyAccesstoken(token:str,credentials_exception,dbs:Session):
-    if redis_service.is_blacklisted(token):
+async def verifyAccesstoken(token:str,credentials_exception,dbs:AsyncSession):
+    if await redis_service.is_blacklisted(token):
         raise credentials_exception
     try:
         # decode's the token which returns a dict of the sent user info 
@@ -50,8 +51,9 @@ def verifyAccesstoken(token:str,credentials_exception,dbs:Session):
         # so we raise an exception
         if id is None or username is None:
             raise credentials_exception
-        # if not then we create a TokenModel and return it to the protected routes
-        user=dbs.query(models.User).filter(models.User.id == id).first()
+        # if not then we query the db using the async select() pattern
+        result=await dbs.execute(select(models.User).where(models.User.id == id))
+        user=result.scalars().first()
         return user
     # if the token itself is invalid we raise a JWTError
     except JWTError:
@@ -61,10 +63,10 @@ def verifyAccesstoken(token:str,credentials_exception,dbs:Session):
 # in the parentheses the Depends(oauth2_scheme) returns the
 # JWT Token which is stored in the token variable below
 # and sent to the verifyAccesstoken() mtd
-def getCurrentUser(token: str = Depends(oauth2_scheme),dbs:Session=Depends(db.getDb)):
+async def getCurrentUser(token: str = Depends(oauth2_scheme),dbs:AsyncSession=Depends(db.getDb)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    return verifyAccesstoken(token,credentials_exception,dbs)
+    return await verifyAccesstoken(token,credentials_exception,dbs)

@@ -70,3 +70,83 @@ Every caller of these functions (routes, oauth2, etc.) will need `await` — han
 - Everything else stays sync — Alembic runs as a CLI tool, not during request handling.
 
 ---
+
+## Phase 2 — Auth Middleware + Services (the chokepoint)
+
+> **Goal:** Convert the authentication layer (`oauth2.py`) and supporting services (`otp_service.py`, `utils.py`) to async. This is the chokepoint — every protected route depends on `getCurrentUser`, which depends on `verifyAccesstoken`, which hits both Redis and the DB. Until this is async, nothing downstream can be.
+
+### 1. `app/oauth2.py` — Fully async token verification + user resolution
+
+**What changed:**
+
+| Function | Before | After |
+|----------|--------|-------|
+| `createAccessToken(data)` | `def` (sync) | **No change** — pure CPU (JWT encode), no I/O |
+| `verifyAccesstoken(token, cred_exc, dbs)` | `def`, `Session`, `dbs.query(...)`, sync `redis_service.is_blacklisted()` | `async def`, `AsyncSession`, `await dbs.execute(select(...))`, `await redis_service.is_blacklisted()` |
+| `getCurrentUser(token, dbs)` | `def`, `Session` from `Depends(db.getDb)` | `async def`, `AsyncSession` from `Depends(db.getDb)`, `return await verifyAccesstoken(...)` |
+
+**Key import changes:**
+- `from sqlalchemy.orm import Session` → `from sqlalchemy.ext.asyncio import AsyncSession`
+- Added `from sqlalchemy import select`
+
+**DB query pattern change:**
+```python
+# BEFORE (sync)
+user = dbs.query(models.User).filter(models.User.id == id).first()
+
+# AFTER (async)
+result = await dbs.execute(select(models.User).where(models.User.id == id))
+user = result.scalars().first()
+```
+
+**Redis call change:**
+```python
+# BEFORE (sync)
+if redis_service.is_blacklisted(token):
+
+# AFTER (async)
+if await redis_service.is_blacklisted(token):
+```
+
+### 2. `app/otp_service.py` — Async OTP save + check
+
+**What changed:**
+
+| Function | Before | After |
+|----------|--------|-------|
+| `generateOtp()` | `def` (sync) | **No change** — pure CPU (`random.randint`) |
+| `saveOtp(db, email, otp)` | `def`, `Session`, `.query().delete()`, `.add()`, `.commit()`, `.refresh()` | `async def`, `AsyncSession`, `await db.execute(delete(...))`, `.add()`, `await db.commit()`, `await db.refresh()` |
+| `checkOtp(db, email, user_otp)` | `def`, `Session`, `.query().first()`, `db.delete()`, `.commit()` | `async def`, `AsyncSession`, `await db.execute(select(...))` + `.scalars().first()`, `await db.delete()`, `await db.commit()` |
+
+**Key import changes:**
+- `from sqlalchemy.orm import Session` → `from sqlalchemy.ext.asyncio import AsyncSession`
+- Added `from sqlalchemy import select, delete`
+
+**DB query pattern change:**
+```python
+# BEFORE — bulk delete
+db.query(models.OTP).filter(models.OTP.email == email).delete()
+
+# AFTER — async delete statement
+await db.execute(delete(models.OTP).where(models.OTP.email == email))
+```
+
+### 3. `app/my_utils/utils.py` — Async OTP cleanup
+
+**What changed:**
+
+| Function | Before | After |
+|----------|--------|-------|
+| `hashPassword(password)` | `def` (sync) | **No change** — CPU-bound bcrypt, staying sync per decision |
+| `verifyPassword(plain, hashed)` | `def` (sync) | **No change** — same reasoning |
+| `cleanUpExpiredOtps(db)` | `def`, `Session`, `.query().delete()`, `.commit()` | `async def`, `AsyncSession`, `await db.execute(delete(...))`, `await db.commit()` |
+
+**Key import changes:**
+- `from sqlalchemy.orm import Session` → `from sqlalchemy.ext.asyncio import AsyncSession`
+- Added `from sqlalchemy import select, delete`
+
+### Why this phase matters
+
+`getCurrentUser` is injected via `Depends()` into **every single protected route** in the app. Now that it's `async def` returning an awaited result from an `AsyncSession`, all downstream routes that depend on it will seamlessly receive the resolved `User` object. Without this phase, no route could be converted to async.
+
+---

@@ -60,6 +60,8 @@ seed.py
 # avoid my personal guides and mini frontend
 my-mini-frontend/
 FastAPI_to_Express_Guide.md
+ASYNC_MIGRATION.md
+
 # avoid ui-ux-promax agent
 .agent
 

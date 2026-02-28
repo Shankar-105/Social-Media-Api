@@ -1,6 +1,7 @@
 import bcrypt
 from datetime import datetime
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
 from app import models
 def hashPassword(password: str) -> str:
     # Convert password to bytes and truncate if necessary
@@ -17,6 +18,6 @@ def verifyPassword(plain_password:str,hashed_password:str) -> bool:
     # Hash with the salt from the stored hash
     return bcrypt.hashpw(password_bytes, hashed_password.encode('utf-8')) == hashed_password.encode('utf-8')
 # optional now --cleans up expired otps from the db
-def cleanUpExpiredOtps(db:Session):
-    db.query(models.OTP).filter(models.OTP.expires_at<datetime.now()).delete()
-    db.commit()
+async def cleanUpExpiredOtps(db:AsyncSession):
+    await db.execute(delete(models.OTP).where(models.OTP.expires_at<datetime.now()))
+    await db.commit()
