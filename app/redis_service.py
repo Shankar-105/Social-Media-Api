@@ -8,7 +8,7 @@
 #   — perfect for caching responses so we don't hit the database every time.
 #
 # HOW THIS MODULE WORKS (step by step):
-#   1. We create ONE shared Redis connection when the app starts.
+#   1. We create ONE shared async Redis connection when the app starts.
 #   2. Before hitting the DB, a route checks Redis: "do I already have
 #      this data cached?"  If YES → return the cached JSON instantly.
 #   3. If NO → query the DB as usual, then STORE the result in Redis
@@ -16,12 +16,12 @@
 #   4. When data changes (create / update / delete), we INVALIDATE
 #      (delete) the relevant cache keys so stale data is never served.
 
-import redis
+import redis.asyncio as aioredis
 import json
 from typing import Any, Optional
 from app.config import settings
 
-#  1. CREATE THE REDIS CLIENT 
+#  1. CREATE THE ASYNC REDIS CLIENT 
 # This is similar to how db.py creates the SQLAlchemy engine.
 # We make ONE client object and import it wherever we need caching.
 #   host  = where your Redis server is running  (localhost / WSL)
@@ -30,7 +30,7 @@ from app.config import settings
 #   decode_responses=True  →  gives us normal Python strings
 #                              instead of raw bytes (b"hello")
 
-redis_client = redis.Redis(
+redis_client = aioredis.Redis(
     host=settings.redis_host,
     port=settings.redis_port,
     db=settings.redis_db,
@@ -39,7 +39,7 @@ redis_client = redis.Redis(
 
 # 2. HELPER FUNCTIONS
 
-def ping_redis() -> bool:
+async def ping_redis() -> bool:
     """
     Check if Redis is reachable.
     Returns True if connected, False otherwise.
@@ -48,11 +48,11 @@ def ping_redis() -> bool:
     and Redis replies with PONG.
     """
     try:
-        return redis_client.ping()   # → True
-    except redis.ConnectionError:
+        return await redis_client.ping()   # → True
+    except Exception:
         return False
 
-def set_cache(key: str, value: Any, ttl: int = 60) -> None:
+async def set_cache(key: str, value: Any, ttl: int = 60) -> None:
     """
     Store something in Redis.
     Parameters
@@ -74,14 +74,14 @@ def set_cache(key: str, value: Any, ttl: int = 60) -> None:
     """
     try:
         json_value = json.dumps(value)
-        redis_client.setex(key,ttl,json_value)
+        await redis_client.setex(key,ttl,json_value)
     except Exception:
         # If Redis is down, silently skip caching — the route still works,
         # it just won't have the speed benefit. Never let cache failures
         # crash a route with a 500.
         pass
 
-def get_cache(key:str) -> Optional[Any]:
+async def get_cache(key:str) -> Optional[Any]:
     """
     Retrieve something from Redis.
     Returns
@@ -90,7 +90,7 @@ def get_cache(key:str) -> Optional[Any]:
     or None if the key has expired or was never set.
     """
     try:
-        cached = redis_client.get(key)   # → JSON string or None
+        cached = await redis_client.get(key)   # → JSON string or None
         if cached is None:
             return None                  # cache MISS
         return json.loads(cached)        # cache HIT
@@ -99,18 +99,18 @@ def get_cache(key:str) -> Optional[Any]:
         # falls through to the database and still returns a response.
         return None
 
-def delete_cache(key: str) -> None:
+async def delete_cache(key: str) -> None:
     """
     Remove a specific key from Redis (invalidate the cache).
     Call this when the underlying data changes, e.g. after a user
     updates their profile, so the next request fetches fresh data.
     """
     try:
-        redis_client.delete(key)
+        await redis_client.delete(key)
     except Exception:
         pass
 
-def delete_cache_pattern(pattern: str) -> None:
+async def delete_cache_pattern(pattern: str) -> None:
     """
     Remove ALL keys matching a pattern.
     Example:  delete_cache_pattern("user_profile:*")
@@ -125,9 +125,9 @@ def delete_cache_pattern(pattern: str) -> None:
     try:
         cursor = 0
         while True:
-            cursor, keys = redis_client.scan(cursor=cursor, match=pattern, count=100)
+            cursor, keys = await redis_client.scan(cursor=cursor, match=pattern, count=100)
             if keys:
-                redis_client.delete(*keys)
+                await redis_client.delete(*keys)
             if cursor == 0:
                 break
     except Exception:
@@ -135,33 +135,33 @@ def delete_cache_pattern(pattern: str) -> None:
 
 #  3. STARTUP CHECK 
 
-def check_redis_connection() -> None:
+async def check_redis_connection() -> None:
     """
     Call this once at app startup to confirm Redis is reachable.
     Prints a clear message to your terminal.
     """
-    if ping_redis():
+    if await ping_redis():
         print("✅ Redis connection successful!")
     else:
         print("❌ Redis connection FAILED — caching will not work.")
         print(f"   Tried connecting to {settings.redis_host}:{settings.redis_port}")
         print("   Make sure your Redis server is running (e.g. in WSL: sudo service redis-server start)")
 
-def add_to_blacklist(token: str, ttl: int):
+async def add_to_blacklist(token: str, ttl: int):
     """
     Adds a token to the Redis blacklist.
     """
     try:
-        redis_client.setex(f"blacklist:{token}", ttl, "true")
+        await redis_client.setex(f"blacklist:{token}", ttl, "true")
     except Exception:
         pass
 
-def is_blacklisted(token: str) -> bool:
+async def is_blacklisted(token: str) -> bool:
     """
     Checks if a token is in the Redis blacklist.
     """
     try:
-        return redis_client.exists(f"blacklist:{token}") > 0
+        return await redis_client.exists(f"blacklist:{token}") > 0
     except Exception:
         # If redis is down, we'll allow the token.
         # This is a security trade-off. For higher security, you might want to return True.

@@ -7,8 +7,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from datetime import datetime
 import datetime
-from redis_service import redis_service
-from email_service import email_service
+import app.redis_service as redis_service
+import app.email_service as email_service
 
 router=APIRouter(tags=['Authentication'])
 @router.post("/login",status_code=status.HTTP_202_ACCEPTED)

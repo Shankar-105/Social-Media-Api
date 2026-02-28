@@ -2,14 +2,14 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app import models,config
-from app.db import engine
+from app.db import sync_engine
 from app.routes import changepassword, posts,users,auth,like,connect,comment,search,me,feed
 from app.redis_service import check_redis_connection
 from chat_system import chat,chat_history,share,delete_msg,delete_shares,edit_msg,msg_info,msg_reaction,share_reaction,media_msg,clear_chat
 from fastapi.middleware.cors import CORSMiddleware
 # creates tables from models.py if the tables doesnt exist
 
-models.Base.metadata.create_all(bind=engine)
+models.Base.metadata.create_all(bind=sync_engine)
 
 # fastapi instance
 app = FastAPI()
@@ -18,8 +18,8 @@ app = FastAPI()
 # placed inside on_event so it runs after the app is fully constructed
 # (avoids firing during 'from app.main import app' in tests/conftest)
 @app.on_event("startup")
-def startup_event():
-    check_redis_connection()
+async def startup_event():
+    await check_redis_connection()
 # tells the uvicorn to render any images at the new paths while displaying profile pics or etc
 # example : without this mount method suppose you hit the see your profile pic endpoint
 # the postman or anyother application returns the url of the profile pic as json
