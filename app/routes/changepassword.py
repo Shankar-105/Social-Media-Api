@@ -1,16 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException,Body
-from sqlalchemy.orm import Session 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app import email_service,models,otp_service,schemas,db,oauth2
 from app.my_utils import utils
 
 router = APIRouter(tags=["changepassword"])
 
 @router.post("/change-password", response_model=schemas.SuccessResponse)
-async def change_password(db: Session = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def change_password(db: AsyncSession = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # call the generate otp method in the otp_service file which generates an otp
     otp=otp_service.generateOtp()
     # save this otp in the db using the saveOtp method in the otp_sevice file 
-    otp_service.saveOtp(db,currentUser.email,otp)
+    await otp_service.saveOtp(db,currentUser.email,otp)
     # after storing it in the db Send email using the method in email file
     try:
        await email_service.send_otp_email(currentUser.email,otp) 
@@ -19,21 +20,21 @@ async def change_password(db: Session = Depends(db.getDb),currentUser:models.Use
         raise HTTPException(status_code=500, detail="Email send failed") 
     return schemas.SuccessResponse(message="OTP sent to your email! Check inbox")
 
-def verifyOtp(db:Session,otp:str,currentUser:models.User):
+async def verifyOtp(db:AsyncSession,otp:str,currentUser:models.User):
     # Check if OTP good
-    if otp_service.checkOtp(db,currentUser.email,otp):
+    if await otp_service.checkOtp(db,currentUser.email,otp):
         return
     raise HTTPException(status_code=400,detail="Wrong or expired OTP")
 
 @router.post("/reset-password", response_model=schemas.SuccessResponse)
-def reset_password(request:schemas.PasswordResetRequest=Body(...),db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def reset_password(request:schemas.PasswordResetRequest=Body(...),db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # first check whether the user entered the correct current password
     if not utils.verifyPassword(request.old_password,currentUser.password):
         raise HTTPException(status_code=403,detail="your old password is incorrect")
     # then, check if it is a valid otp before letting user change password
-    verifyOtp(db,request.otp,currentUser)
+    await verifyOtp(db,request.otp,currentUser)
     # Hash new password (using methods in utils.py)
     currentUser.password = utils.hashPassword(request.new_password)
     # Save to DB
-    db.commit()
+    await db.commit()
     return schemas.SuccessResponse(message="Password changed successfully! Now login with new one.")

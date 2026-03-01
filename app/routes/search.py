@@ -1,20 +1,28 @@
 from fastapi import HTTPException,status,Body,APIRouter,Depends,Request,Query
 from app import models,db,schemas as sch,oauth2,config
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select,func
 from typing import Annotated
 router=APIRouter(tags=['search'])
 
 @router.get("/search", status_code=status.HTTP_202_ACCEPTED, response_model=sch.SearchResultResponse)
-def search(searchParams: sch.SearchRequest = Depends(), db: Session = Depends(db.getDb), currenUser: models.User = Depends(oauth2.getCurrentUser)):
+async def search(searchParams: sch.SearchRequest = Depends(), db: AsyncSession = Depends(db.getDb), currenUser: models.User = Depends(oauth2.getCurrentUser)):
     if searchParams.q and searchParams.q.startswith("#"):
         # Hashtag search - search for posts
         hashtag = searchParams.q.lstrip("#")
-        queryResult=db.query(models.Post).filter(models.Post.hashtags.ilike(f"%{hashtag}%"))
+        base_query=select(models.Post).where(models.Post.hashtags.ilike(f"%{hashtag}%"))
         if searchParams.orderBy == "likes":
-            queryResult=queryResult.order_by(models.Post.likes.desc())
-        queryResult=queryResult.order_by(models.Post.created_at.asc())
-        total = queryResult.count()
-        resPosts=queryResult.offset(searchParams.offset).limit(searchParams.limit).all()
+            base_query=base_query.order_by(models.Post.likes.desc())
+        base_query=base_query.order_by(models.Post.created_at.asc())
+        
+        # Count total
+        count_query=select(func.count()).select_from(models.Post).where(models.Post.hashtags.ilike(f"%{hashtag}%"))
+        totalResult=await db.execute(count_query)
+        total=totalResult.scalar()
+        
+        # Fetch paginated results
+        postsResult=await db.execute(base_query.offset(searchParams.offset).limit(searchParams.limit))
+        resPosts=postsResult.scalars().all()
         
         # Build proper response for posts
         posts = []
@@ -36,14 +44,16 @@ def search(searchParams: sch.SearchRequest = Depends(), db: Session = Depends(db
         )
     elif searchParams.q:
         # Username search - search for users
-        resUsers=(
-            db.query(models.User)
-            .filter(models.User.username.ilike(f"%{searchParams.q}%"))
+        usersResult=await db.execute(
+            select(models.User)
+            .where(models.User.username.ilike(f"%{searchParams.q}%"))
             .offset(searchParams.offset)
             .limit(searchParams.limit)
-            .all()
         )
-        total = db.query(models.User).filter(models.User.username.ilike(f"%{searchParams.q}%")).count()
+        resUsers=usersResult.scalars().all()
+        
+        countResult=await db.execute(select(func.count()).select_from(models.User).where(models.User.username.ilike(f"%{searchParams.q}%")))
+        total=countResult.scalar()
         
         # Build proper response for users
         users = []

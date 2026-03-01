@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException,Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select,func,desc
 from typing import List
 from app import models, schemas, oauth2 , db
 import os
@@ -8,21 +8,35 @@ import os
 router = APIRouter(tags=["Feed"])
 
 @router.get("/feed/home", response_model=schemas.FeedResponse)
-def getHomeFeed(limit:int=Query(10, ge=1, le=100),
+async def getHomeFeed(limit:int=Query(10, ge=1, le=100),
     offset: int = Query(0,ge=0),
-    db:Session=Depends(db.getDb),
+    db:AsyncSession=Depends(db.getDb),
     currentUser:models.User=Depends(oauth2.getCurrentUser)
     ):
-    # Get users the current user follows
-    followed_users = [user.id for user in currentUser.following]
+    # Get users the current user follows via connections table
+    followingResult = await db.execute(
+        select(models.connections.c.followed_id).where(models.connections.c.follower_id == currentUser.id)
+    )
+    followed_users = [row[0] for row in followingResult.all()]
     
     # Query posts from followed users, recent first
-    posts_query = db.query(models.Post).filter(models.Post.user_id.in_(followed_users)).order_by(models.Post.created_at.desc())
-    total=posts_query.count()
-    posts=posts_query.offset(offset).limit(limit).all()
+    countResult = await db.execute(
+        select(func.count()).select_from(models.Post).where(models.Post.user_id.in_(followed_users))
+    )
+    total=countResult.scalar()
+    
+    postsResult = await db.execute(
+        select(models.Post).where(models.Post.user_id.in_(followed_users))
+        .order_by(models.Post.created_at.desc())
+        .offset(offset).limit(limit)
+    )
+    posts=postsResult.scalars().all()
     
     # Get liked post IDs
-    liked_post_ids = {v.post_id for v in db.query(models.Votes).filter(models.Votes.user_id == currentUser.id, models.Votes.action == True).all()}
+    votesResult = await db.execute(
+        select(models.Votes.post_id).where(models.Votes.user_id == currentUser.id, models.Votes.action == True)
+    )
+    liked_post_ids = {row[0] for row in votesResult.all()}
     
     # Build proper feed response
     user_homeFeed = []
@@ -53,19 +67,27 @@ def getHomeFeed(limit:int=Query(10, ge=1, le=100),
     return schemas.FeedResponse(feed=user_homeFeed, total=total)
 
 @router.get("/feed/explore", response_model=schemas.PostListResponse)
-def getExploreFeed(limit:int=Query(20, ge=1, le=100),
+async def getExploreFeed(limit:int=Query(20, ge=1, le=100),
     offset: int = Query(0,ge=0),
-    db:Session=Depends(db.getDb),
+    db:AsyncSession=Depends(db.getDb),
     currentUser:models.User=Depends(oauth2.getCurrentUser)
     ):
     # For explore, get all posts (or random) - excluding potentially private ones if that existed
     # Simple implementation: All recent posts
-    posts_query = db.query(models.Post).order_by(models.Post.created_at.desc())
-    total = posts_query.count()
-    posts = posts_query.offset(offset).limit(limit).all()
+    countResult = await db.execute(select(func.count()).select_from(models.Post))
+    total = countResult.scalar()
+    
+    postsResult = await db.execute(
+        select(models.Post).order_by(models.Post.created_at.desc())
+        .offset(offset).limit(limit)
+    )
+    posts = postsResult.scalars().all()
     
     # Get liked post IDs
-    liked_post_ids = {v.post_id for v in db.query(models.Votes).filter(models.Votes.user_id == currentUser.id, models.Votes.action == True).all()}
+    votesResult = await db.execute(
+        select(models.Votes.post_id).where(models.Votes.user_id == currentUser.id, models.Votes.action == True)
+    )
+    liked_post_ids = {row[0] for row in votesResult.all()}
     
     # helper to format posts specifically for explore (similar to user posts list)
     explore_posts = []

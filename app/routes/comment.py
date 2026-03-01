@@ -1,14 +1,15 @@
 from fastapi import Body,HTTPException,status,APIRouter,Depends,Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select,and_,func
 from app import oauth2,models,db,schemas as sch
-from sqlalchemy import and_
 
 router=APIRouter(tags=['comment'])
 
 @router.post("/comment",status_code=status.HTTP_201_CREATED, response_model=sch.CommentDetailResponse)
-def createComment(comment:sch.CommentCreateRequest=Body(...),db:Session=Depends(db.getDb),currentUser: models.User = Depends(oauth2.getCurrentUser)):
+async def createComment(comment:sch.CommentCreateRequest=Body(...),db:AsyncSession=Depends(db.getDb),currentUser: models.User = Depends(oauth2.getCurrentUser)):
     # Check if the post exists
-    post = db.query(models.Post).filter(models.Post.id == comment.post_id).first()
+    result = await db.execute(select(models.Post).where(models.Post.id == comment.post_id))
+    post = result.scalars().first()
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Post with id {comment.post_id} not found")
     if not post.enable_comments:
@@ -20,8 +21,8 @@ def createComment(comment:sch.CommentCreateRequest=Body(...),db:Session=Depends(
     if post.comments_cnt is None:
         post.comments_cnt =0
     post.comments_cnt += 1
-    db.commit()
-    db.refresh(new_comment)
+    await db.commit()
+    await db.refresh(new_comment)
     
     # Build proper response
     user = sch.UserBasicResponse(
@@ -41,22 +42,24 @@ def createComment(comment:sch.CommentCreateRequest=Body(...),db:Session=Depends(
     )
 
 @router.delete("/comments/delete_comment/{comment_id}",status_code=status.HTTP_200_OK, response_model=sch.SuccessResponse)
-def deleteComment(comment_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    commentTodelete=db.query(models.Comments).filter(and_(models.Comments.id==comment_id,models.Comments.user_id==currentUser.id)).first()
+async def deleteComment(comment_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.Comments).where(and_(models.Comments.id==comment_id,models.Comments.user_id==currentUser.id)))
+    commentTodelete=result.scalars().first()
     if not commentTodelete:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"comment with Id {comment_id} not Found") 
-    db.delete(commentTodelete)
-    db.commit()
+    await db.delete(commentTodelete)
+    await db.commit()
     return sch.SuccessResponse(message=f"Comment {comment_id} deleted successfully")
 
 @router.patch("/comments/edit_comment/{comment_id}",status_code=status.HTTP_200_OK, response_model=sch.CommentDetailResponse)
-def editComment(comment_id:int,editInfo:sch.CommentUpdateRequest=Body(...),db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    commentToBeEdited=db.query(models.Comments).filter(and_(models.Comments.id==comment_id,models.Comments.user_id==currentUser.id)).first()
+async def editComment(comment_id:int,editInfo:sch.CommentUpdateRequest=Body(...),db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.Comments).where(and_(models.Comments.id==comment_id,models.Comments.user_id==currentUser.id)))
+    commentToBeEdited=result.scalars().first()
     if not commentToBeEdited:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"comment with Id {comment_id} not Found")
     commentToBeEdited.comment_content=editInfo.comment_content
-    db.commit()
-    db.refresh(commentToBeEdited)
+    await db.commit()
+    await db.refresh(commentToBeEdited)
     
     # Build proper response
     user = sch.UserBasicResponse(
@@ -76,17 +79,19 @@ def editComment(comment_id:int,editInfo:sch.CommentUpdateRequest=Body(...),db:Se
     )
 
 @router.get("/comments-on/{post_id}", response_model=sch.CommentListResponse)
-def getAllPosts(post_id:int,
+async def getAllPosts(post_id:int,
     limit:int=Query(10, ge=1, le=100),
     offset: int = Query(0,ge=0),
-    db:Session=Depends(db.getDb),
+    db:AsyncSession=Depends(db.getDb),
     currentUser:models.User=Depends(oauth2.getCurrentUser)
     ):
     # calculate the total number of comments on the post
-    total=db.query(models.Comments).filter(models.Comments.post_id==post_id).count()
+    countResult=await db.execute(select(func.count()).select_from(models.Comments).where(models.Comments.post_id==post_id))
+    total=countResult.scalar()
     # only fetch the first 'limit' comments after skipping the first 'offset' comments
     # and order them by the latest as first
-    paginatedComments=db.query(models.Comments).filter(models.Comments.post_id==post_id).offset(offset).limit(limit).all()
+    commentsResult=await db.execute(select(models.Comments).where(models.Comments.post_id==post_id).offset(offset).limit(limit))
+    paginatedComments=commentsResult.scalars().all()
     
     # Build proper response
     commentsResponse = []

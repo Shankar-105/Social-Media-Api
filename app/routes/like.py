@@ -2,8 +2,8 @@ from fastapi import status,HTTPException,Depends,Body,APIRouter
 import app.schemas as sch
 from app import models,oauth2
 from app.db import getDb
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select,and_
 from sqlalchemy.exc import IntegrityError
 
 router=APIRouter(
@@ -12,16 +12,18 @@ router=APIRouter(
 
 @router.post("/vote/on_post",status_code=status.HTTP_201_CREATED, response_model=sch.VoteResponse)
 # get the post user that user wants to vote on with which user he is
-def voteOnPost(post:sch.VoteRequest=Body(...),db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def voteOnPost(post:sch.VoteRequest=Body(...),db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # search for the post he wants to vote on against the db 
     # to firstly check whether that particular post is present or not in the db
-    queriedPost=db.query(models.Post).filter(models.Post.id==post.post_id).first()
+    result=await db.execute(select(models.Post).where(models.Post.id==post.post_id))
+    queriedPost=result.scalars().first()
     # if not present just raise an 404 error
     if not queriedPost:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with Id {post.post_id} not Found")
     # if present in db then search in the votes table for knowing if he has
     # already voted on the post or not
-    currentVote=db.query(models.Votes).filter(and_(models.Votes.post_id==post.post_id,models.Votes.user_id==currentUser.id)).first()
+    voteResult=await db.execute(select(models.Votes).where(and_(models.Votes.post_id==post.post_id,models.Votes.user_id==currentUser.id)))
+    currentVote=voteResult.scalars().first()
     try:
         # if currentVote is not None then record of voting exists
         # by that particular user in the votes table
@@ -29,15 +31,15 @@ def voteOnPost(post:sch.VoteRequest=Body(...),db:Session=Depends(getDb),currentU
             # User already voted, with the same choice
             if currentVote.action == post.choice:
                 # Same choice again means remove the vote
-                db.delete(currentVote)
+                await db.delete(currentVote)
                 # update the same on the posts table also
                 # by removing the vote accordingly (like/dislike)
                 if post.choice:
                     queriedPost.likes -= 1
                 else:
                     queriedPost.dis_likes-= 1
-                db.commit()
-                db.refresh(queriedPost)
+                await db.commit()
+                await db.refresh(queriedPost)
                 return sch.VoteResponse(message="Vote removed successfully", likes=queriedPost.likes, dislikes=queriedPost.dis_likes)
             else:
                 # Switching vote (e.g., like to dislike or vice versa)
@@ -48,8 +50,8 @@ def voteOnPost(post:sch.VoteRequest=Body(...),db:Session=Depends(getDb),currentU
                 else:
                     queriedPost.likes -= 1
                     queriedPost.dis_likes += 1
-                db.commit()
-                db.refresh(queriedPost)
+                await db.commit()
+                await db.refresh(queriedPost)
                 return sch.VoteResponse(message="Vote switched successfully", likes=queriedPost.likes, dislikes=queriedPost.dis_likes)
         else:
             # New vote
@@ -65,25 +67,27 @@ def voteOnPost(post:sch.VoteRequest=Body(...),db:Session=Depends(getDb),currentU
             # or else dilikes count
             else:
                 queriedPost.dis_likes += 1
-            db.commit()
-            db.refresh(queriedPost)
+            await db.commit()
+            await db.refresh(queriedPost)
             return sch.VoteResponse(message="New vote added successfully", likes=queriedPost.likes, dislikes=queriedPost.dis_likes)
     # triggers if any thing goes wrong in db as the logic is solid
     except IntegrityError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Database error, please try again"
                             )
 @router.post("/vote/on_comment",status_code=status.HTTP_201_CREATED, response_model=sch.VoteResponse)
-def likeAComment(comment:sch.CommentVoteRequest=Body(...),db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def likeAComment(comment:sch.CommentVoteRequest=Body(...),db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # search for the comment he wants to vote on against the db 
     # to firstly check whether that particular comment is present or not in the db
-    queriedComment=db.query(models.Comments).filter(models.Comments.id==comment.comment_id).first()
+    result=await db.execute(select(models.Comments).where(models.Comments.id==comment.comment_id))
+    queriedComment=result.scalars().first()
     # if not present just raise an 404 error
     if not queriedComment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"comment with Id {comment.comment_id} not Found")
     # if present in db then search in the Commentvotes table for knowing if he has
     # already voted on the comment or not
-    currentVote=db.query(models.CommentVotes).filter(and_(models.CommentVotes.comment_id==comment.comment_id,models.CommentVotes.user_id==currentUser.id)).first()
+    voteResult=await db.execute(select(models.CommentVotes).where(and_(models.CommentVotes.comment_id==comment.comment_id,models.CommentVotes.user_id==currentUser.id)))
+    currentVote=voteResult.scalars().first()
     try:
         # if currentVote is not None then record of voting exists
         # by that particular user in the Commentvotes table
@@ -91,13 +95,13 @@ def likeAComment(comment:sch.CommentVoteRequest=Body(...),db:Session=Depends(get
             # User already voted, with the same choice
             if currentVote.like==comment.choice:
                 # Same choice again means remove the vote
-                db.delete(currentVote)
+                await db.delete(currentVote)
                 # update the same on the CommentVotes table also
                 # by removing the vote (like)
                 if comment.choice:
                     queriedComment.likes-=1
-                db.commit()
-                db.refresh(queriedComment)
+                await db.commit()
+                await db.refresh(queriedComment)
                 return sch.VoteResponse(message="Vote removed successfully", likes=queriedComment.likes)
         else:
             # New like on a comment
@@ -110,10 +114,10 @@ def likeAComment(comment:sch.CommentVoteRequest=Body(...),db:Session=Depends(get
             # if user choice is true increase likes count
             if comment.choice:
                 queriedComment.likes+=1
-            db.commit()
-            db.refresh(queriedComment)
+            await db.commit()
+            await db.refresh(queriedComment)
             return sch.VoteResponse(message="New vote added successfully", likes=queriedComment.likes)
     # triggers if any thing goes wrong in db as the logic is solid
     except IntegrityError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Database error, please try again")

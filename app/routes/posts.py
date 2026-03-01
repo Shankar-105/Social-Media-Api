@@ -3,9 +3,11 @@ import app.schemas as sch
 from typing import Optional
 from app import models,oauth2
 from app.db import getDb
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select,and_
 import os,uuid,shutil
+import aiofiles
+import asyncio
 from app.config import settings
 router=APIRouter(
     tags=['Posts']
@@ -13,25 +15,28 @@ router=APIRouter(
 
 # gets a specific post with id -> {postId}
 @router.get("/posts/getPost/{postId}", response_model=sch.PostDetailResponse)
-def getPost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    reqPost=db.query(models.Post).filter(and_(models.Post.id==postId,models.Post.user_id==currentUser.id)).first()
+async def getPost(postId:int,db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.Post).where(and_(models.Post.id==postId,models.Post.user_id==currentUser.id)))
+    reqPost=result.scalars().first()
     if reqPost==None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with id {postId} not found")
     # is the post viewed before
-    isViewed = db.query(models.PostView).filter(
+    viewResult=await db.execute(select(models.PostView).where(
         and_(models.PostView.post_id == postId, models.PostView.user_id == currentUser.id)
-    ).first()
+    ))
+    isViewed=viewResult.scalars().first()
     # If no prior view, record the view and increment the count
     if not isViewed:
         # If no prior view, record the view and increment the count
         new_view = models.PostView(post_id=postId,user_id=currentUser.id)
         db.add(new_view)
         reqPost.views+=1
-        db.commit()
-        db.refresh(reqPost)  # Refresh to get updated post data
+        await db.commit()
+        await db.refresh(reqPost)  # Refresh to get updated post data
     
     # Check if liked
-    is_liked = db.query(models.Votes).filter(models.Votes.post_id == postId, models.Votes.user_id == currentUser.id, models.Votes.action == True).first() is not None
+    likeResult=await db.execute(select(models.Votes).where(models.Votes.post_id == postId, models.Votes.user_id == currentUser.id, models.Votes.action == True))
+    is_liked = likeResult.scalars().first() is not None
     
     # Build proper response with schema
     media_url = None
@@ -65,11 +70,11 @@ def getPost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depends
 
 # creates a new post using sqlAlchemy
 @router.post("/posts/createPost", status_code=status.HTTP_201_CREATED, response_model=sch.PostDetailResponse)
-def create_post(
+async def create_post(
     title:str=Form(...),
     content:str=Form(...),
     media:Optional[UploadFile]=File(None),  # Optional file
-    db: Session=Depends(getDb),
+    db: AsyncSession=Depends(getDb),
     currentUser:models.User=Depends(oauth2.getCurrentUser) 
 ):
     # set to None change if uploaded later
@@ -84,9 +89,10 @@ def create_post(
         ext=media.filename.split(".")[-1]
         filename=f"{uuid.uuid4()}.{ext}"
         file_path=os.path.join(settings.media_folder,filename)
-        # transfer the data from args to the file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(media.file, buffer)
+        # transfer the data from args to the file using aiofiles (non-blocking)
+        content_bytes = await media.read()
+        async with aiofiles.open(file_path, "wb") as buffer:
+            await buffer.write(content_bytes)
         # we will only store the filename in the db
         media_path=filename
         media_type="image" if media.content_type.startswith("image") else "video"
@@ -98,8 +104,8 @@ def create_post(
         user_id=currentUser.id
     )
     db.add(new_post)
-    db.commit()
-    db.refresh(new_post)
+    await db.commit()
+    await db.refresh(new_post)
     
     # Build proper response
     media_url = None
@@ -130,23 +136,25 @@ def create_post(
     )
 # delets a specific post with the mentioned id -> {id}
 @router.delete("/posts/deletePost/{postId}", response_model=sch.SuccessResponse)
-def deletePost(postId:int,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    postToDelete=db.query(models.Post).filter(and_(models.Post.id==postId,models.Post.user_id==currentUser.id)).first()
+async def deletePost(postId:int,db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.Post).where(and_(models.Post.id==postId,models.Post.user_id==currentUser.id)))
+    postToDelete=result.scalars().first()
     if not postToDelete:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with Id {postId} not Found")
     # Fix bug: construct path before checking existence
     if postToDelete.media_path:
         media_path = f"{settings.media_folder}/{postToDelete.media_path}"
         if os.path.exists(media_path):
-            os.remove(media_path)
-    db.delete(postToDelete)
-    db.commit()
+            await asyncio.to_thread(os.remove, media_path)
+    await db.delete(postToDelete)
+    await db.commit()
     return sch.SuccessResponse(message=f"Post {postToDelete.id} deleted successfully")
 
 # update a specific post with id -> {id}
 @router.put("/posts/editPost/{postId}", response_model=sch.PostDetailResponse)
-def editPost(postId:int,post:sch.PostUpdateRequest,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    postToUpdate=db.query(models.Post).filter(models.Post.id==postId).first()
+async def editPost(postId:int,post:sch.PostUpdateRequest,db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.Post).where(models.Post.id==postId))
+    postToUpdate=result.scalars().first()
     if not postToUpdate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with Id {postId} not Found")
     # from our argument of post we exclude the None values
@@ -157,11 +165,11 @@ def editPost(postId:int,post:sch.PostUpdateRequest,db:Session=Depends(getDb),cur
     for key, value in update_data.items():
         setattr(postToUpdate,key,value)
     # commit those updated changes
-    db.commit()
+    await db.commit()
     # refresh to qucikly view them below while returing 
     # if not refreshed below returned postToUpdate will be
     # sent as {} to the front End
-    db.refresh(postToUpdate)
+    await db.refresh(postToUpdate)
     
     # Build proper response
     media_url = None

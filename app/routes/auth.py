@@ -1,13 +1,14 @@
 from fastapi import status,HTTPException,Depends,Body,APIRouter
-from app import db,models,oauth2, redis_service, otp_service, email_service
-from sqlalchemy.orm import Session
+from app import db,models,oauth2
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 import app.my_utils.utils as utils
 import app.schemas as sch
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from datetime import datetime
-import datetime
 import app.redis_service as redis_service
+import app.otp_service as otp_service
 import app.email_service as email_service
 
 router=APIRouter(tags=['Authentication'])
@@ -15,9 +16,10 @@ router=APIRouter(tags=['Authentication'])
 # method which log's in user if he has an account
 # using the built-in schema for login 'OAuth2PasswordRequestForm'
 # which is equivalent to our 'sch.UserLoginCred'
-def loginUser(userCred:OAuth2PasswordRequestForm=Depends(),db:Session=Depends(db.getDb)):
+async def loginUser(userCred:OAuth2PasswordRequestForm=Depends(),db:AsyncSession=Depends(db.getDb)):
   # checks against the db for the username provided 
-  isUserPresent=db.query(models.User).filter(models.User.username==userCred.username).first()
+  result=await db.execute(select(models.User).where(models.User.username==userCred.username))
+  isUserPresent=result.scalars().first()
   # if not found tell the user not found
   if not isUserPresent:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"user {userCred.username} not Found")
@@ -36,7 +38,7 @@ def loginUser(userCred:OAuth2PasswordRequestForm=Depends(),db:Session=Depends(db
                         )
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
-def logout(token: str = Depends(oauth2.oauth2_scheme)):
+async def logout(token: str = Depends(oauth2.oauth2_scheme)):
     try:
         # Decode the token to get the expiration time
         payload = jwt.decode(token, oauth2.SECRET_KEY, algorithms=[oauth2.ALGORITHM])
@@ -46,7 +48,7 @@ def logout(token: str = Depends(oauth2.oauth2_scheme)):
             remaining_time = expire_time - datetime.now().timestamp()
             if remaining_time > 0:
                 # Add token to blacklist with remaining time as TTL
-                redis_service.add_to_blacklist(token, int(remaining_time))
+                await redis_service.add_to_blacklist(token, int(remaining_time))
         return {"message": "Successfully logged out"}
     except JWTError:
         raise HTTPException(
@@ -55,8 +57,9 @@ def logout(token: str = Depends(oauth2.oauth2_scheme)):
         )
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
-async def forgot_password(payload: sch.ForgotPasswordSchema, db: Session = Depends(db.getDb)):
-    user = db.query(models.User).filter(models.User.email == payload.email).first()
+async def forgot_password(payload: sch.ForgotPasswordSchema, db: AsyncSession = Depends(db.getDb)):
+    result = await db.execute(select(models.User).where(models.User.email == payload.email))
+    user = result.scalars().first()
     if not user:
         # To prevent user enumeration, we don't reveal if the user exists or not.
         # We'll just return a success message.
@@ -64,7 +67,7 @@ async def forgot_password(payload: sch.ForgotPasswordSchema, db: Session = Depen
 
     # Generate and save OTP
     otp = otp_service.generateOtp()
-    otp_service.saveOtp(db, payload.email, otp, minutes=5)
+    await otp_service.saveOtp(db, payload.email, otp, minutes=5)
 
     # Send OTP email
     try:
@@ -78,16 +81,17 @@ async def forgot_password(payload: sch.ForgotPasswordSchema, db: Session = Depen
         )
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
-def reset_password(payload: sch.ResetPasswordSchema, db: Session = Depends(db.getDb)):
+async def reset_password(payload: sch.ResetPasswordSchema, db: AsyncSession = Depends(db.getDb)):
     # Verify OTP
-    if not otp_service.checkOtp(db, payload.email, payload.otp):
+    if not await otp_service.checkOtp(db, payload.email, payload.otp):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired OTP."
         )
 
     # Find user and update password
-    user = db.query(models.User).filter(models.User.email == payload.email).first()
+    result = await db.execute(select(models.User).where(models.User.email == payload.email))
+    user = result.scalars().first()
     if not user:
         # This should ideally not happen if OTP was validated correctly
         # but as a safeguard.
@@ -99,7 +103,7 @@ def reset_password(payload: sch.ResetPasswordSchema, db: Session = Depends(db.ge
     # Hash the new password and update the user record
     hashed_password = utils.hashPassword(payload.new_password)
     user.password = hashed_password
-    db.commit()
+    await db.commit()
 
     return {"message": "Password has been reset successfully."}
 

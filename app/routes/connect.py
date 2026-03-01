@@ -2,8 +2,8 @@ from fastapi import status,HTTPException,Depends,Body,APIRouter
 import app.schemas as sch
 from app import models,oauth2
 from app.db import getDb
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select,and_,insert,delete,func
 from sqlalchemy.exc import IntegrityError
 from typing import List
 from app.redis_service import delete_cache
@@ -11,79 +11,132 @@ from app.redis_service import delete_cache
 router=APIRouter(tags=['connections'])
 
 @router.post("/follow/{user_id}",status_code=status.HTTP_201_CREATED, response_model=sch.FollowResponse)
-def follow(user_id:int,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    userToFollow=db.query(models.User).filter(models.User.id==user_id).first()
+async def follow(user_id:int,db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.User).where(models.User.id==user_id))
+    userToFollow=result.scalars().first()
     if not userToFollow:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="User doesnt exist")
     if userToFollow.id == currentUser.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Cannot follow yourself")
-    if userToFollow in currentUser.following:
+    # Check if already following via connections table
+    existingConn=await db.execute(
+        select(models.connections).where(
+            and_(models.connections.c.followed_id==user_id, models.connections.c.follower_id==currentUser.id)
+        )
+    )
+    if existingConn.first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Your already following this user")
     try:
-        currentUser.following.append(userToFollow)
-        currentUser.following_cnt=len(currentUser.following)
-        userToFollow.followers_cnt=len(userToFollow.followers)
-        db.commit()
+        # Direct INSERT into the connections association table
+        await db.execute(insert(models.connections).values(followed_id=user_id, follower_id=currentUser.id))
+        # Update counts via a count query for accuracy
+        following_cnt_result = await db.execute(select(func.count()).select_from(models.connections).where(models.connections.c.follower_id==currentUser.id))
+        currentUser.following_cnt = following_cnt_result.scalar()
+        followers_cnt_result = await db.execute(select(func.count()).select_from(models.connections).where(models.connections.c.followed_id==user_id))
+        userToFollow.followers_cnt = followers_cnt_result.scalar()
+        await db.commit()
     except IntegrityError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to follow user")
     # follower/following counts changed on both users — invalidate both profiles
-    delete_cache(f"user_profile:{currentUser.id}")
-    delete_cache(f"user_profile:{userToFollow.id}")
+    await delete_cache(f"user_profile:{currentUser.id}")
+    await delete_cache(f"user_profile:{userToFollow.id}")
     return sch.FollowResponse(message=f"Followed user {userToFollow.username}", following_count=currentUser.following_cnt)
     
 @router.delete("/unfollow/{user_id}",status_code=status.HTTP_200_OK, response_model=sch.FollowResponse)
-def unfollow(user_id:int,db:Session=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    userToUnFollow=db.query(models.User).filter(models.User.id==user_id).first()
+async def unfollow(user_id:int,db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.User).where(models.User.id==user_id))
+    userToUnFollow=result.scalars().first()
     if not userToUnFollow:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="User doesnt exist")
-    if userToUnFollow not in currentUser.following:
+    # Check if actually following via connections table
+    existingConn=await db.execute(
+        select(models.connections).where(
+            and_(models.connections.c.followed_id==user_id, models.connections.c.follower_id==currentUser.id)
+        )
+    )
+    if not existingConn.first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Not following this user")
     try:
-        currentUser.following.remove(userToUnFollow)
-        currentUser.following_cnt=len(currentUser.following)
-        userToUnFollow.followers_cnt=len(userToUnFollow.followers)
-        db.commit()
+        # Direct DELETE from the connections association table
+        await db.execute(
+            delete(models.connections).where(
+                and_(models.connections.c.followed_id==user_id, models.connections.c.follower_id==currentUser.id)
+            )
+        )
+        # Update counts
+        following_cnt_result = await db.execute(select(func.count()).select_from(models.connections).where(models.connections.c.follower_id==currentUser.id))
+        currentUser.following_cnt = following_cnt_result.scalar()
+        followers_cnt_result = await db.execute(select(func.count()).select_from(models.connections).where(models.connections.c.followed_id==user_id))
+        userToUnFollow.followers_cnt = followers_cnt_result.scalar()
+        await db.commit()
     except IntegrityError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to unfollow user")
     # follower/following counts changed on both users — invalidate both profiles
-    delete_cache(f"user_profile:{currentUser.id}")
-    delete_cache(f"user_profile:{userToUnFollow.id}")
+    await delete_cache(f"user_profile:{currentUser.id}")
+    await delete_cache(f"user_profile:{userToUnFollow.id}")
     return sch.FollowResponse(message=f"Unfollowed user {userToUnFollow.username}", following_count=currentUser.following_cnt)
 
 @router.delete("/remove_follower/{user_id}", status_code=status.HTTP_200_OK, response_model=sch.FollowResponse)
-def remove_follower(user_id: int, db: Session = Depends(getDb), currentUser: models.User = Depends(oauth2.getCurrentUser)):
-    userToRemove = db.query(models.User).filter(models.User.id == user_id).first()
+async def remove_follower(user_id: int, db: AsyncSession = Depends(getDb), currentUser: models.User = Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.User).where(models.User.id == user_id))
+    userToRemove=result.scalars().first()
     if not userToRemove:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User doesn't exist")
     
-    # Check if this user is actually following me
-    if userToRemove not in currentUser.followers:
+    # Check if this user is actually following me via connections table
+    existingConn=await db.execute(
+        select(models.connections).where(
+            and_(models.connections.c.followed_id==currentUser.id, models.connections.c.follower_id==user_id)
+        )
+    )
+    if not existingConn.first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This user is not following you")
 
     try:
-        # Remove them from my followers list
-        currentUser.followers.remove(userToRemove)
+        # Direct DELETE from the connections association table
+        await db.execute(
+            delete(models.connections).where(
+                and_(models.connections.c.followed_id==currentUser.id, models.connections.c.follower_id==user_id)
+            )
+        )
         
         # Update counts
-        currentUser.followers_cnt = len(currentUser.followers)
-        userToRemove.following_cnt = len(userToRemove.following) # They are following me, so their following count decreases
+        followers_cnt_result = await db.execute(select(func.count()).select_from(models.connections).where(models.connections.c.followed_id==currentUser.id))
+        currentUser.followers_cnt = followers_cnt_result.scalar()
+        following_cnt_result = await db.execute(select(func.count()).select_from(models.connections).where(models.connections.c.follower_id==user_id))
+        userToRemove.following_cnt = following_cnt_result.scalar()
         
-        db.commit()
+        await db.commit()
     except IntegrityError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to remove follower")
     # follower/following counts changed on both users — invalidate both profiles
-    delete_cache(f"user_profile:{currentUser.id}")
-    delete_cache(f"user_profile:{userToRemove.id}")
+    await delete_cache(f"user_profile:{currentUser.id}")
+    await delete_cache(f"user_profile:{userToRemove.id}")
     return sch.FollowResponse(message=f"Removed follower {userToRemove.username}", following_count=currentUser.following_cnt)
 
 @router.get("/users/{user_id}/followers", response_model=List[sch.UserBasicResponse])
-def get_followers(user_id:int,db:Session=Depends(getDb), currentUser: models.User = Depends(oauth2.getCurrentUser)):
-    user=db.query(models.User).filter(models.User.id==user_id).first()
+async def get_followers(user_id:int,db:AsyncSession=Depends(getDb), currentUser: models.User = Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.User).where(models.User.id==user_id))
+    user=result.scalars().first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get follower IDs from connections table, then load users
+    followerResult = await db.execute(
+        select(models.User).join(
+            models.connections, models.connections.c.follower_id == models.User.id
+        ).where(models.connections.c.followed_id == user_id)
+    )
+    followers = followerResult.scalars().all()
+    
+    # Get current user's following IDs for is_following check
+    followingResult = await db.execute(
+        select(models.connections.c.followed_id).where(models.connections.c.follower_id == currentUser.id)
+    )
+    current_following_ids = {row[0] for row in followingResult.all()}
     
     return [
         sch.UserBasicResponse(
@@ -91,15 +144,30 @@ def get_followers(user_id:int,db:Session=Depends(getDb), currentUser: models.Use
             username=f.username,
             nickname=f.nickname,
             profile_pic=f.profile_picture,
-            is_following=(f in currentUser.following)
-        ) for f in user.followers
+            is_following=(f.id in current_following_ids)
+        ) for f in followers
     ]
 
 @router.get("/users/{user_id}/following", response_model=List[sch.UserBasicResponse])
-def get_following(user_id:int,db:Session=Depends(getDb), currentUser: models.User = Depends(oauth2.getCurrentUser)):
-    user=db.query(models.User).filter(models.User.id==user_id).first()
+async def get_following(user_id:int,db:AsyncSession=Depends(getDb), currentUser: models.User = Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.User).where(models.User.id==user_id))
+    user=result.scalars().first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get following users from connections table
+    followingResult = await db.execute(
+        select(models.User).join(
+            models.connections, models.connections.c.followed_id == models.User.id
+        ).where(models.connections.c.follower_id == user_id)
+    )
+    following = followingResult.scalars().all()
+    
+    # Get current user's following IDs for is_following check
+    currentFollowingResult = await db.execute(
+        select(models.connections.c.followed_id).where(models.connections.c.follower_id == currentUser.id)
+    )
+    current_following_ids = {row[0] for row in currentFollowingResult.all()}
     
     return [
         sch.UserBasicResponse(
@@ -107,6 +175,6 @@ def get_following(user_id:int,db:Session=Depends(getDb), currentUser: models.Use
             username=f.username,
             nickname=f.nickname,
             profile_pic=f.profile_picture,
-            is_following=(f in currentUser.following)
-        ) for f in user.following
+            is_following=(f.id in current_following_ids)
+        ) for f in following
     ]

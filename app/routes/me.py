@@ -3,10 +3,12 @@ from fastapi.responses import FileResponse
 import app.schemas as sch
 from typing import List
 from app import models,db,oauth2
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select,and_,distinct,func,case,update
 import os,shutil
+import aiofiles
+import asyncio
 from fastapi import UploadFile,File
-from sqlalchemy import and_,distinct,func,case
 from app.redis_service import delete_cache
 
 router=APIRouter(
@@ -14,21 +16,24 @@ router=APIRouter(
 )
 
 @router.get("/me/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfileResponse)
-def myProfile(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def myProfile(db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    # Count posts via query for accuracy
+    posts_count_result = await db.execute(select(func.count()).select_from(models.Post).where(models.Post.user_id==currentUser.id))
+    posts_count = posts_count_result.scalar()
     return sch.UserProfileResponse(
         id=currentUser.id,
         username=currentUser.username,
         nickname=currentUser.nickname,
         bio=currentUser.bio or "",
         profile_picture=currentUser.profile_picture,
-        posts_count=len(currentUser.posts),
+        posts_count=posts_count,
         followers_count=currentUser.followers_cnt,
         following_count=currentUser.following_cnt,
         created_at=currentUser.created_at
     )
 
 @router.get("/me/profile/pic",status_code=status.HTTP_200_OK, response_model=sch.MediaInfo)
-def myProfilePicture(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def myProfilePicture(db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # get the current users profile pic
     profilePicturePath = currentUser.profile_picture
     # if he doesnt have a porfile pic return 404
@@ -44,34 +49,37 @@ def myProfilePicture(db:Session=Depends(db.getDb),currentUser:models.User=Depend
         type="image"
     )
 @router.delete("/me/profilepic/delete",status_code=status.HTTP_200_OK, response_model=sch.SuccessResponse)
-def removeProfilePicture(db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def removeProfilePicture(db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     profilePic=currentUser.profile_picture
     if not profilePic:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="No profile picture to remove")
     file_path=f"profilepics/{profilePic}"
     if os.path.exists(file_path):
-        os.remove(file_path)
+        await asyncio.to_thread(os.remove, file_path)
     currentUser.profile_picture=None
-    db.commit()
+    await db.commit()
     # profile changed — bust the cached profile for this user
-    delete_cache(f"user_profile:{currentUser.id}")
+    await delete_cache(f"user_profile:{currentUser.id}")
     return sch.SuccessResponse(message="Profile picture removed successfully")
 
 # retrives all posts using sqlAlchemy
 @router.get("/me/posts", response_model=sch.PostListResponse)  
-def getAllPosts(limit:int=Query(10, ge=1, le=100),
+async def getAllPosts(limit:int=Query(10, ge=1, le=100),
     offset: int = Query(0,ge=0),
-    db:Session=Depends(db.getDb),
+    db:AsyncSession=Depends(db.getDb),
     currentUser:models.User=Depends(oauth2.getCurrentUser)
     ):
     # calculate the total number of posts of the currentuser
-    total=db.query(models.Post).filter(models.Post.user_id==currentUser.id).count()
+    countResult=await db.execute(select(func.count()).select_from(models.Post).where(models.Post.user_id==currentUser.id))
+    total=countResult.scalar()
     # only fetch the first 'limit' posts after skipping the first 'offset' posts
     # and order them by the latest as first
-    paginatedPosts=db.query(models.Post).filter(models.Post.user_id==currentUser.id).order_by(models.Post.created_at.desc()).offset(offset).limit(limit).all()
+    postsResult=await db.execute(select(models.Post).where(models.Post.user_id==currentUser.id).order_by(models.Post.created_at.desc()).offset(offset).limit(limit))
+    paginatedPosts=postsResult.scalars().all()
     
     # Get all post IDs the user has liked
-    liked_post_ids = {v.post_id for v in db.query(models.Votes).filter(models.Votes.user_id == currentUser.id, models.Votes.action == True).all()}
+    votesResult=await db.execute(select(models.Votes.post_id).where(models.Votes.user_id == currentUser.id, models.Votes.action == True))
+    liked_post_ids = {row[0] for row in votesResult.all()}
     
     # Build proper response
     posts = []
@@ -107,11 +115,12 @@ def getAllPosts(limit:int=Query(10, ge=1, le=100),
 # ambiguity as one of the section is being passed via Form and the other via Body
 # so made everything to be passed via Form only
 @router.patch("/me/updateInfo",status_code=status.HTTP_200_OK, response_model=sch.UserProfileResponse)
-def updateUserInfo(username:str=Form(None),bio:str=Form(None),profile_picture:UploadFile=File(None),db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def updateUserInfo(username:str=Form(None),bio:str=Form(None),profile_picture:UploadFile=File(None),db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # to store updates the user does
     updates={}
     if username:
-        if db.query(models.User).filter(models.User.username == username,models.User.id !=currentUser.id).first():
+        dupResult=await db.execute(select(models.User).where(models.User.username == username,models.User.id !=currentUser.id))
+        if dupResult.scalars().first():
             raise HTTPException(status_code=400, detail="Username already taken")
         updates["username"] = username
     if bio:
@@ -132,17 +141,22 @@ def updateUserInfo(username:str=Form(None),bio:str=Form(None),profile_picture:Up
         filename_toput_inDb=f"{currentUser.username}_{profile_picture.filename}"
         # this is the actual file path where the profile pics reside
         file_path=f"profilepics/{currentUser.username}_{profile_picture.filename}"
-        # py methods to copy the argumented image in our file_path
-        with open(file_path,"wb") as buffer:
-           shutil.copyfileobj(profile_picture.file,buffer)
+        # async file write using aiofiles (non-blocking)
+        content_bytes = await profile_picture.read()
+        async with aiofiles.open(file_path,"wb") as buffer:
+            await buffer.write(content_bytes)
         updates['profile_picture']=filename_toput_inDb
         # if any updates update them
     if updates:
-        db.query(models.User).filter(models.User.id==currentUser.id).update(updates)
-        db.commit()
-        db.refresh(currentUser)
+        await db.execute(update(models.User).where(models.User.id==currentUser.id).values(**updates))
+        await db.commit()
+        await db.refresh(currentUser)
         # profile changed — bust the cached profile for this user
-        delete_cache(f"user_profile:{currentUser.id}")
+        await delete_cache(f"user_profile:{currentUser.id}")
+    
+    # Count posts for response
+    posts_count_result = await db.execute(select(func.count()).select_from(models.Post).where(models.Post.user_id==currentUser.id))
+    posts_count = posts_count_result.scalar()
     
     # Build proper response
     return sch.UserProfileResponse(
@@ -151,15 +165,20 @@ def updateUserInfo(username:str=Form(None),bio:str=Form(None),profile_picture:Up
         nickname=currentUser.nickname,
         bio=currentUser.bio,
         profile_picture=currentUser.profile_picture,
-        posts_count=len(currentUser.posts),
+        posts_count=posts_count,
         followers_count=currentUser.followers_cnt,
         following_count=currentUser.following_cnt,
         created_at=currentUser.created_at
     )
 
 @router.get("/me/votedOnPosts",status_code=status.HTTP_200_OK)
-def getVotedPosts(db:Session=Depends(db.getDb),currentUser:models.User =Depends(oauth2.getCurrentUser)):
-    voted_posts=currentUser.voted_posts
+async def getVotedPosts(db:AsyncSession=Depends(db.getDb),currentUser:models.User =Depends(oauth2.getCurrentUser)):
+    # Query voted posts via join
+    result=await db.execute(
+        select(models.Post).join(models.Votes, models.Votes.post_id==models.Post.id)
+        .where(models.Votes.user_id==currentUser.id)
+    )
+    voted_posts=result.scalars().all()
     return {
                 f"{currentUser.username} you have voted on posts":
             [
@@ -173,12 +192,15 @@ def getVotedPosts(db:Session=Depends(db.getDb),currentUser:models.User =Depends(
     }
 
 @router.get("/me/voteStats",status_code=status.HTTP_200_OK, response_model=sch.VoteStatsResponse)
-def voteStatus(db:Session=Depends(db.getDb),currentUser:models.User = Depends(oauth2.getCurrentUser)):
+async def voteStatus(db:AsyncSession=Depends(db.getDb),currentUser:models.User = Depends(oauth2.getCurrentUser)):
     # using the func,case and quering - BUG FIX: summary returns a list of Row objects
-    summary=db.query(
-        func.count(case((models.Votes.action==True, 1))).label("likes"),
-        func.count(case((models.Votes.action==False, 1))).label("dislikes")
-    ).filter(models.Votes.user_id==currentUser.id).first()  # Changed .all() to .first()
+    result=await db.execute(
+        select(
+            func.count(case((models.Votes.action==True, 1))).label("likes"),
+            func.count(case((models.Votes.action==False, 1))).label("dislikes")
+        ).where(models.Votes.user_id==currentUser.id)
+    )
+    summary=result.first()
     
     return sch.VoteStatsResponse(
         liked_posts_count=summary.likes if summary else 0,
@@ -186,14 +208,14 @@ def voteStatus(db:Session=Depends(db.getDb),currentUser:models.User = Depends(oa
     )
 
 @router.get("/me/likedPosts")
-def get_liked_posts(db:Session = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def get_liked_posts(db:AsyncSession = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # Query liked posts
-    liked_posts = (
-        db.query(models.Post)
+    result=await db.execute(
+        select(models.Post)
         .join(models.Votes, models.Votes.post_id==models.Post.id)
-        .filter(and_(models.Votes.user_id==currentUser.id, models.Votes.action==True))
-        .all()
+        .where(and_(models.Votes.user_id==currentUser.id, models.Votes.action==True))
     )
+    liked_posts=result.scalars().all()
     return {
         f"{currentUser.username} your liked posts includes":
         [
@@ -205,13 +227,13 @@ def get_liked_posts(db:Session = Depends(db.getDb),currentUser:models.User=Depen
         ]
     }
 @router.get("/me/dislikedPosts")
-def get_disliked_posts(db:Session = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):    # Query disliked posts
-    liked_posts = (
-        db.query(models.Post)
+async def get_disliked_posts(db:AsyncSession = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):    # Query disliked posts
+    result=await db.execute(
+        select(models.Post)
         .join(models.Votes,models.Votes.post_id==models.Post.id)
-        .filter(and_(models.Votes.user_id==currentUser.id, models.Votes.action==False))
-        .all()
+        .where(and_(models.Votes.user_id==currentUser.id, models.Votes.action==False))
     )
+    liked_posts=result.scalars().all()
     return {
         f"{currentUser.username} your disliked posts includes":
         [
@@ -224,19 +246,20 @@ def get_disliked_posts(db:Session = Depends(db.getDb),currentUser:models.User=De
     }
 
 @router.get("/me/commented-on",status_code=status.HTTP_200_OK)
-def getCommentedPosts(db:Session=Depends(db.getDb),currentUser:models.User =Depends(oauth2.getCurrentUser)):
+async def getCommentedPosts(db:AsyncSession=Depends(db.getDb),currentUser:models.User =Depends(oauth2.getCurrentUser)):
     # get the current users all commented posts id's ignore duplicates
-    uniquePostIds=db.query(distinct(models.Comments.post_id)).filter(models.Comments.user_id==currentUser.id).all()
+    uniqueResult=await db.execute(select(distinct(models.Comments.post_id)).where(models.Comments.user_id==currentUser.id))
+    uniquePostIds=uniqueResult.all()
     # the 'uniquePostIds' is a list of tuples where each tuple is
     # of the form (post_id1,) (post_id2,) so we exract the first elem
     # from each of the tuples in the list
     post_ids = [row[0] for row in uniquePostIds]
     # query for the post_ids in the Posts table
-    commented_posts=(
-        db.query(models.Post)
-        .filter(models.Post.id.in_(post_ids))
-        .all()
+    postsResult=await db.execute(
+        select(models.Post)
+        .where(models.Post.id.in_(post_ids))
     )
+    commented_posts=postsResult.scalars().all()
     return {
                 f"{currentUser.username} you have commented on posts":
             [
@@ -250,9 +273,13 @@ def getCommentedPosts(db:Session=Depends(db.getDb),currentUser:models.User =Depe
     }
 
 @router.get("/me/comment-stats",status_code=status.HTTP_200_OK, response_model=sch.CommentStatsResponse)
-def commentStatus(db:Session=Depends(db.getDb),currentUser:models.User = Depends(oauth2.getCurrentUser)):
-    comment_count = len(currentUser.total_comments)
-    uniquePostIds=db.query(distinct(models.Comments.post_id)).filter(models.Comments.user_id==currentUser.id).count()
+async def commentStatus(db:AsyncSession=Depends(db.getDb),currentUser:models.User = Depends(oauth2.getCurrentUser)):
+    # Count total comments by user
+    commentCountResult=await db.execute(select(func.count()).select_from(models.Comments).where(models.Comments.user_id==currentUser.id))
+    comment_count=commentCountResult.scalar()
+    # Count unique posts commented on
+    uniquePostsResult=await db.execute(select(func.count(distinct(models.Comments.post_id))).where(models.Comments.user_id==currentUser.id))
+    uniquePostIds=uniquePostsResult.scalar()
     return sch.CommentStatsResponse(
         total_comments=comment_count,
         unique_posts_commented=uniquePostIds

@@ -2,7 +2,8 @@ from fastapi import status,HTTPException,Depends,Body,APIRouter,Query
 from typing import List
 import app.schemas as sch
 from app import models,db,oauth2
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select,func
 import app.my_utils.utils as utils
 import os
 from app.redis_service import get_cache, set_cache, delete_cache
@@ -11,28 +12,33 @@ router=APIRouter(
 )
 
 @router.get("/users/{user_id}/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfileResponse)
-def userProfile(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def userProfile(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # Check Redis cache first 
     cache_key = f"user_profile:{user_id}"
-    cached = get_cache(cache_key)
+    cached = await get_cache(cache_key)
     if cached:
         # Cache HIT → return the cached dict directly (FastAPI serializes it)
         cached["is_following"] = user_id in [u.id for u in currentUser.following]
         return cached
 
     # Cache MISS → query the database
-    user=db.query(models.User).filter(models.User.id==user_id).first()
+    result=await db.execute(select(models.User).where(models.User.id==user_id))
+    user=result.scalars().first()
     
     # Check if current user follows this user
     is_following = user in currentUser.following
     
-    result = sch.UserProfileResponse(
+    # Count posts via query instead of len(user.posts) for efficiency
+    posts_count_result = await db.execute(select(func.count()).select_from(models.Post).where(models.Post.user_id==user_id))
+    posts_count = posts_count_result.scalar()
+    
+    result_response = sch.UserProfileResponse(
         id=user.id,
         username=user.username,
         nickname=user.nickname,
         bio=user.bio or "",
         profile_picture=user.profile_picture,
-        posts_count=len(user.posts),
+        posts_count=posts_count,
         followers_count=user.followers_cnt,
         following_count=user.following_cnt,
         is_following=is_following,
@@ -40,13 +46,14 @@ def userProfile(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User
     )
 
     #  Store in Redis for 120 seconds
-    set_cache(cache_key, result.model_dump(mode="json"), ttl=120)
-    return result
+    await set_cache(cache_key, result_response.model_dump(mode="json"), ttl=120)
+    return result_response
 
 @router.get("/users/{user_id}/profile/pic",status_code=status.HTTP_200_OK, response_model=sch.MediaInfo)
-def myProfilePicture(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def myProfilePicture(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # get the current users profile pic
-    user=db.query(models.User).filter(models.User.id==user_id).first()
+    result=await db.execute(select(models.User).where(models.User.id==user_id))
+    user=result.scalars().first()
     profilePicturePath = user.profile_picture
     # if he doesnt have a porfile pic return 404
     if not profilePicturePath:
@@ -62,37 +69,39 @@ def myProfilePicture(user_id:int,db:Session=Depends(db.getDb),currentUser:models
     )
 
 @router.post("/user/signup",status_code=status.HTTP_201_CREATED,response_model=sch.UserResponse)
-def createUser(userData:sch.UserSignupRequest=Body(...),db:Session=Depends(db.getDb)):
+async def createUser(userData:sch.UserSignupRequest=Body(...),db:AsyncSession=Depends(db.getDb)):
     # hash the password using the bcrypt lib
     hashedPw=utils.hashPassword(userData.password)
     userData.password=hashedPw
     newUser=models.User(**userData.dict())
     db.add(newUser)
-    db.commit()
-    db.refresh(newUser)
+    await db.commit()
+    await db.refresh(newUser)
     # Invalidate the all_users cache because a new user was added
-    delete_cache("all_users")
+    await delete_cache("all_users")
     return newUser
 
 @router.get("/users/getAllUsers",status_code=status.HTTP_201_CREATED,response_model=List[sch.UserResponse])
-def getAllUsers(db:Session=Depends(db.getDb)):
+async def getAllUsers(db:AsyncSession=Depends(db.getDb)):
     # Check the cache first
-    cached = get_cache("all_users")
+    cached = await get_cache("all_users")
     if cached:
         return cached   # cache HIT
 
     #  Cache MISS → hit DB
-    allUsers=db.query(models.User).all()
+    result=await db.execute(select(models.User))
+    allUsers=result.scalars().all()
 
     # Build serializable list & cache it for 60 seconds
     users_data = [sch.UserResponse.model_validate(u).model_dump(mode="json") for u in allUsers]
-    set_cache("all_users", users_data, ttl=60)
+    await set_cache("all_users", users_data, ttl=60)
 
     return allUsers
 
 @router.get("/users/{user_id}/followers",status_code=status.HTTP_200_OK, response_model=List[sch.UserBasicResponse])
-def get_followers(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
+async def get_followers(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.User).where(models.User.id == user_id))
+    user=result.scalars().first()
     if not user:
         raise HTTPException(status_code=404,detail="User not found")
     # Build proper response
@@ -107,8 +116,9 @@ def get_followers(user_id:int,db:Session=Depends(db.getDb),currentUser:models.Us
     return followers
 
 @router.get("/users/{user_id}/following",status_code=status.HTTP_200_OK, response_model=List[sch.UserBasicResponse])
-def get_following(user_id:int,db:Session=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
+async def get_following(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    result=await db.execute(select(models.User).where(models.User.id == user_id))
+    user=result.scalars().first()
     if not user:
         raise HTTPException(status_code=404,detail="User not found")
     # Build proper response
@@ -123,16 +133,18 @@ def get_following(user_id:int,db:Session=Depends(db.getDb),currentUser:models.Us
     return following
 
 @router.get("/users/{user_id}/posts", response_model=sch.PostListResponse)  
-def getAllPosts(user_id:int,limit:int=Query(10, ge=1, le=100),
+async def getAllPosts(user_id:int,limit:int=Query(10, ge=1, le=100),
     offset: int = Query(0,ge=0),
-    db:Session=Depends(db.getDb),
+    db:AsyncSession=Depends(db.getDb),
     currentUser:models.User=Depends(oauth2.getCurrentUser)
     ):
     # calculate the total number of posts of the user
-    total=db.query(models.Post).filter(models.Post.user_id==user_id).count()
+    countResult=await db.execute(select(func.count()).select_from(models.Post).where(models.Post.user_id==user_id))
+    total=countResult.scalar()
     # only fetch the first 'limit' posts after skipping the first 'offset' posts
     # and order them by the latest as first
-    paginatedPosts=db.query(models.Post).filter(models.Post.user_id==user_id).order_by(models.Post.created_at.desc()).offset(offset).limit(limit).all()
+    postsResult=await db.execute(select(models.Post).where(models.Post.user_id==user_id).order_by(models.Post.created_at.desc()).offset(offset).limit(limit))
+    paginatedPosts=postsResult.scalars().all()
     
     # Build proper response
     posts = []

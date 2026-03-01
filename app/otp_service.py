@@ -3,6 +3,7 @@ from app import models
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 import random 
+
 def generateOtp():
     otp = str(random.randint(100000, 999999))
     return otp
