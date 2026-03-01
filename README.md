@@ -1,8 +1,7 @@
 # 🚀 SocialMediaApi
 **Modern Social Media Backend + Real-time Chat – Scalable, Fast, and Beginner-Friendly**
 
-A full-featured social media **backend API** with **real-time 1-on-1 chat**, built using FastAPI, SQLAlchemy, Alembic migrations, PostgreSQL, and JWT authentication.  
-Supports file uploads, instant messaging via WebSockets, and everything you need for an impressive, social experience!
+A **fully async, non-blocking** social media backend built to handle **thousands of concurrent connections** without breaking a sweat. Powered by FastAPI, asyncpg, Redis, and WebSockets — every route, every query, every cache hit runs on the event loop. CPU-heavy work (bcrypt, JWT) is offloaded to the thread pool so the server never stalls. Production-grade, real-time, and built for scale.
 
 ---
 
@@ -15,62 +14,12 @@ Supports file uploads, instant messaging via WebSockets, and everything you need
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=plastic&logo=docker&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7.0+-red?logo=redis&logoColor=white)
 
-## 🌟 Features — What’s Inside?
+## 🌟 Features — Everything Inside
 
-### 🎉 Social API
-
-- 📝 **User Registration & Login**
-    - Secure password hashing (bcrypt)
-    - JWT access tokens with expiry prevents attackers
-    - Password reset via email OTP
-    - Change password (OTP verification)
-- 👤 **Profile System**
-    - Bio, nickname
-    - Profile picture upload/remove
-    - Update username & info
-- 🔗 **Follow / Unfollow**
-    - Followers/following lists & counts
-    - View lists
-- 📰 **Posts**
-    - Create, read, update, delete posts (text + **media**: images/videos)
-    - File uploads for post media
-    - Likes/dislikes with toggle logic
-    - Post analytics (views counter)
-    - Comment on posts (**full CRUD**)
-    - Vote/like comments
-    - Share posts into DMs
-    - Home feed (from people you follow + pagination)
-- 🔍 **Search**
-    - Search users & posts
-    - Hashtag support (#example)
-- 📦 **Data Organization**
-    - Local folders auto-created: `profilepics/`, `posts_media/`, `chat-media/`
-- 🏅 **Analytics**
-    - See your vote stats, comment stats, and post engagement
+_This API packs **a lot**. For the full breakdown of every feature — async architecture, auth, chat, caching, media, DevOps, and more — see [`FEATURES.md`](./FEATURES.md)._
 
 ---
 
-### 💬 Real-Time Chat System (WebSockets)
-
-- 📨 **1-on-1 Direct Messages**
-    - Instant delivery, offline queues
-    - Send text, images, videos, audio, documents
-- 🔥 **Live Features**
-    - Typing indicators
-    - Online/offline status (ping-pong heartbeat)
-    - Read receipts
-    - Message reactions (emoji)
-    - Full chat history (including missed messages)
-- 🔄 **Advanced Message Controls**
-    - Reply to any message (and shared posts)
-    - Quote messages
-    - Edit messages (rate limited)
-    - Delete for me / Delete for everyone (“unsend”)
-    - Proper message ordering, filtering of deleted/edited messages
-- ✅ **Robust Delivery**
-    - Connection management (ping-pong, zombie detection)
-    - All messages synced and stored
----
 ## 🚦 Getting Started — Simplified with Docker!
 
 _Want to Run the Api or wanna test or make your own changes to the code here's [`SET-UP`](https://github.com/Shankar-105/Social-Media-Api/blob/main/SETUP.md) how you can 
