@@ -3,7 +3,7 @@ from fastapi import status,HTTPException,Depends,Body,APIRouter
 import app.schemas as sch
 from app import models,oauth2,config
 from app.db import getDb
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_,and_,select
 from typing import List
 from sqlalchemy.exc import IntegrityError
@@ -11,57 +11,51 @@ from sqlalchemy.exc import IntegrityError
 router = APIRouter(prefix="/chat", tags=["chat_history"])
 
 @router.get("/history/{friend_id}")
-def get_chat_history(
+async def get_chat_history(
     friend_id: int,
-    db: Session = Depends(getDb),
+    db: AsyncSession = Depends(getDb),
     currentUser: models.User = Depends(oauth2.getCurrentUser),
 ):
-    # ... (existing content logic) ...
     # CRITICAL: Hide undelivered messages from friend
     # firstly let us fetch out the 'delted for me' msgs by the current user
     subq=(
-        # to avoid the SAWaring we need put the subQuery inside the select() constructor
         select(models.DeletedMessage.message_id)
         .where(models.DeletedMessage.user_id == currentUser.id)
-        .scalar_subquery()  # imp  because we are using this sub-query inside the in_ 
-        # so we need to ensure not all the cols are passed but that one required column
-        # which is also clearly mentioned in the select() the 'message_id'
+        .scalar_subquery()
     )
     # now let us use that subquery in NOT EXISTS and simply query off the final messages
-    messages = db.query(models.Message).filter(
-        # 1. Not deleted for everyone
-        models.Message.is_deleted_for_everyone == False,
-        # 2. Is between these two users
-        or_(
-            # show everything from sender side even if read or not
-            and_(models.Message.sender_id == currentUser.id, models.Message.receiver_id == friend_id),
-            # from receiver side show EVERYTHING addressed to me
-            and_(models.Message.sender_id == friend_id, models.Message.receiver_id == currentUser.id)
-        ),
-        # 3. Not deleted by THIS user (NOT EXISTS)
-        ~models.Message.id.in_(subq)
-    ).order_by(models.Message.created_at.desc()).all()
+    messages_result = await db.execute(
+        select(models.Message).where(
+            # 1. Not deleted for everyone
+            models.Message.is_deleted_for_everyone == False,
+            # 2. Is between these two users
+            or_(
+                and_(models.Message.sender_id == currentUser.id, models.Message.receiver_id == friend_id),
+                and_(models.Message.sender_id == friend_id, models.Message.receiver_id == currentUser.id)
+            ),
+            # 3. Not deleted by THIS user (NOT EXISTS)
+            ~models.Message.id.in_(subq)
+        ).order_by(models.Message.created_at.desc())
+    )
+    messages = messages_result.scalars().all()
     # shared posts
 
     deleted_shared_subq = (
-    select(models.DeletedSharedPost.shared_post_id)
-    .where(models.DeletedSharedPost.user_id == currentUser.id)
-    .scalar_subquery()
-)
-    shared_posts = db.query(models.SharedPost).filter(
-        models.SharedPost.is_deleted_for_everyone == False,
-        (
-            # My messages show all whether he has seen them or not
-            (models.SharedPost.from_user_id == currentUser.id) &
-            (models.SharedPost.to_user_id == friend_id)
-        ) | (
-            # Friend's messages show all
-            (models.SharedPost.from_user_id == friend_id) &
-            (models.SharedPost.to_user_id == currentUser.id)
-        ),(
-        ~models.SharedPost.id.in_(deleted_shared_subq)    
-        )
-    ).order_by(models.SharedPost.created_at.desc()).all()
+        select(models.DeletedSharedPost.shared_post_id)
+        .where(models.DeletedSharedPost.user_id == currentUser.id)
+        .scalar_subquery()
+    )
+    shared_result = await db.execute(
+        select(models.SharedPost).where(
+            models.SharedPost.is_deleted_for_everyone == False,
+            or_(
+                and_(models.SharedPost.from_user_id == currentUser.id, models.SharedPost.to_user_id == friend_id),
+                and_(models.SharedPost.from_user_id == friend_id, models.SharedPost.to_user_id == currentUser.id)
+            ),
+            ~models.SharedPost.id.in_(deleted_shared_subq)
+        ).order_by(models.SharedPost.created_at.desc())
+    )
+    shared_posts = shared_result.scalars().all()
 
     chat_history=[]
     for m in messages:
@@ -131,21 +125,20 @@ def get_chat_history(
     return chat_history  # oldest first
 
 @router.get("/recent-chats")
-def get_recent_chats(
-    db: Session = Depends(getDb),
+async def get_recent_chats(
+    db: AsyncSession = Depends(getDb),
     currentUser: models.User = Depends(oauth2.getCurrentUser)
 ):
-    # Fetch all messages involving the user, ordered by time desc
-    # This is not the most efficient for millions of rows but works for thousands.
-    # A true optimized version would use window functions or a separate conversation table.
-    
-    all_messages = db.query(models.Message).filter(
-        or_(
-            models.Message.sender_id == currentUser.id,
-            models.Message.receiver_id == currentUser.id
-        ),
-        models.Message.is_deleted_for_everyone == False
-    ).order_by(models.Message.created_at.desc()).limit(1000).all()
+    all_messages_result = await db.execute(
+        select(models.Message).where(
+            or_(
+                models.Message.sender_id == currentUser.id,
+                models.Message.receiver_id == currentUser.id
+            ),
+            models.Message.is_deleted_for_everyone == False
+        ).order_by(models.Message.created_at.desc()).limit(1000)
+    )
+    all_messages = all_messages_result.scalars().all()
     
     # Process in python to get unique conversations (other_user_id)
     conversations = {} # other_user_id -> last_message_obj
@@ -160,7 +153,10 @@ def get_recent_chats(
         return []
         
     other_user_ids = list(conversations.keys())
-    users = db.query(models.User).filter(models.User.id.in_(other_user_ids)).all()
+    users_result = await db.execute(
+        select(models.User).where(models.User.id.in_(other_user_ids))
+    )
+    users = users_result.scalars().all()
     user_map = {u.id: u for u in users}
     
     # Construct response
@@ -184,11 +180,6 @@ def get_recent_chats(
             }
         })
         
-    # Sort by message time (descending)
-    # format_timestamp returns buffer string, but we want to sort by original object created_at?
-    # Actually results were populated based on `all_messages` iteration which was sorted DESC.
-    # But dictionary iteration might lose order legally (though usually insertion order in Python 3.7+).
-    # To be safe:
     results.sort(key=lambda x: conversations[x["id"]].created_at, reverse=True)
     
     return results

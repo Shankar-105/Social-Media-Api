@@ -1,14 +1,14 @@
 from fastapi import status,HTTPException,Depends,Body,APIRouter
 import app.schemas as sch
 from app import models,oauth2,config,db
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_,and_,select,insert,literal
 from typing import List
 
 router=APIRouter(tags=['clear-chat'])
 
 @router.delete("/clear-chat/{friend_id}")
-def clear_chat(friend_id:int,db:Session =Depends(db.getDb),current_user:models.User=Depends(oauth2.getCurrentUser)):
+async def clear_chat(friend_id:int,db:AsyncSession =Depends(db.getDb),current_user:models.User=Depends(oauth2.getCurrentUser)):
     
     # messages already deleted by me
     deleted_subq = (
@@ -30,7 +30,7 @@ def clear_chat(friend_id:int,db:Session =Depends(db.getDb),current_user:models.U
         )
     )
     # Insert all those message_ids into DeletedMessage table for this user
-    db.execute(
+    await db.execute(
     insert(models.DeletedMessage).from_select(
         ["user_id","message_id"],
         visible_messages.with_only_columns(
@@ -38,5 +38,5 @@ def clear_chat(friend_id:int,db:Session =Depends(db.getDb),current_user:models.U
         )
     )
 )
-    db.commit()
+    await db.commit()
     return {"detail": "Chat cleared successfully"}

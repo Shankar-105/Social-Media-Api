@@ -1,17 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app import models,oauth2,db
 from app.my_utils.time_formatting import format_timestamp
 
 router = APIRouter(tags=['Message Info'])
 
 @router.get("/msgs/{msg_id}/info")
-def get_message_info(
+async def get_message_info(
     msg_id: int,
-    db: Session = Depends(db.getDb),
+    db: AsyncSession = Depends(db.getDb),
     currentUser: models.User = Depends(oauth2.getCurrentUser)
 ):
-    msg = db.query(models.Message).filter(models.Message.id == msg_id).first()
+    result = await db.execute(
+        select(models.Message).where(models.Message.id == msg_id)
+    )
+    msg = result.scalars().first()
     if not msg:
         raise HTTPException(404, "Message not found")
     

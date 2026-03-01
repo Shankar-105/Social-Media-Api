@@ -1,6 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.my_utils.socket_manager import manager
 from app.my_utils.time_formatting import format_timestamp
 from datetime import datetime
@@ -8,7 +8,7 @@ from datetime import datetime
 async def messageUser(
     payload:schemas.MessageSchema,
     user_id:int,
-    db:Session
+    db:AsyncSession
 ):    
         msg = models.Message(
         content=payload.content,
@@ -18,8 +18,8 @@ async def messageUser(
         media_url=payload.media_url
     )
         db.add(msg)
-        db.commit()
-        db.refresh(msg)
+        await db.commit()
+        await db.refresh(msg)
         print("added to db")
         
         reply_payload = {
@@ -41,7 +41,7 @@ async def messageUser(
                 print("Message sent via WebSocket")
                 msg.is_read = True
                 msg.read_at=datetime.utcnow()
-                db.commit()
+                await db.commit()
                 print(f"Message {msg.id} marked as READ")
             except Exception as e:
                 # Send failed → zombie socket → remove

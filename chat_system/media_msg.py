@@ -1,11 +1,11 @@
 # routes/dm.py or routes/chat.py
 from fastapi import File, UploadFile, APIRouter, Depends
-import shutil
+import aiofiles
 import os
 from datetime import datetime
 from uuid import uuid4
 from app import models,oauth2,schemas
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.my_utils.socket_manager import manager
 router = APIRouter()
 
@@ -25,8 +25,9 @@ async def upload_media(
     filename = f"{uuid4()}.{file_extension}"
     file_path = f"{folder}/{filename}"
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    content_bytes = await file.read()
+    async with aiofiles.open(file_path, "wb") as buffer:
+        await buffer.write(content_bytes)
     # Return media URL to frontend
     media_url = f"/{media_type}s/{filename}"
     return {"media_url":media_url,"type":media_type}

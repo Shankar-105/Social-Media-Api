@@ -1,39 +1,54 @@
 from fastapi import Depends
 from app import schemas, models, oauth2,db,config
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 from app.my_utils.socket_manager import manager
 from datetime import datetime
 from app.my_utils.time_formatting import format_timestamp
 
 async def load_missed_content(
     user_id: int,
-    db: Session=Depends(db.getDb)
+    db: AsyncSession=Depends(db.getDb)
 ):
-        missed_messages = db.query(models.Message).filter(
+        missed_result = await db.execute(
+            select(models.Message).where(
                 models.Message.is_deleted_for_everyone==False,
                 models.Message.receiver_id == user_id,
                 models.Message.is_read == False
-            ).order_by(models.Message.created_at.asc()).all()
+            ).order_by(models.Message.created_at.asc())
+        )
+        missed_messages = missed_result.scalars().all()
 
         if missed_messages:
-            db.query(models.Message).filter(
-                models.Message.is_deleted_for_everyone==False,
-                models.Message.receiver_id == user_id,
-                models.Message.is_read == False
-            ).update({"is_read":True,"read_at":datetime.utcnow()},synchronize_session=False)
-            db.commit()
+            await db.execute(
+                update(models.Message)
+                .where(
+                    models.Message.is_deleted_for_everyone==False,
+                    models.Message.receiver_id == user_id,
+                    models.Message.is_read == False
+                )
+                .values(is_read=True, read_at=datetime.utcnow())
+            )
+            await db.commit()
 
-        missed_shares = db.query(models.SharedPost).filter(
-        models.SharedPost.to_user_id == user_id,
-        models.SharedPost.is_read == False
-    ).order_by(models.SharedPost.created_at.asc()).all()
+        missed_shares_result = await db.execute(
+            select(models.SharedPost).where(
+                models.SharedPost.to_user_id == user_id,
+                models.SharedPost.is_read == False
+            ).order_by(models.SharedPost.created_at.asc())
+        )
+        missed_shares = missed_shares_result.scalars().all()
         
         if missed_shares:
-                db.query(models.SharedPost).filter(
-                    models.SharedPost.to_user_id == user_id,
-                    models.SharedPost.is_read == False
-                ).update({"is_read": True}, synchronize_session=False)
-                db.commit()
+                await db.execute(
+                    update(models.SharedPost)
+                    .where(
+                        models.SharedPost.to_user_id == user_id,
+                        models.SharedPost.is_read == False
+                    )
+                    .values(is_read=True)
+                )
+                await db.commit()
 
         missed_content=[]
         for m in missed_messages:

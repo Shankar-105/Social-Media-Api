@@ -1,6 +1,7 @@
 from fastapi import APIRouter,WebSocket, WebSocketDisconnect,Depends,Query,HTTPException
 from app import schemas, models, oauth2,db
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.my_utils.socket_manager import manager
 import json,asyncio
 from datetime import datetime
@@ -12,14 +13,15 @@ router=APIRouter(tags=['delete msg'])
 # user that the message is deleted so doesn't envolve the receiver so we dont
 # have a need here to use the websockets just let the frontend do its ui work
 @router.post("/delete/for-me/{msg_id}")
-def deleteForMe(
+async def deleteForMe(
     msg_id: int,
-    db: Session=Depends(db.getDb),
+    db: AsyncSession=Depends(db.getDb),
     me: models.User = Depends(oauth2.getCurrentUser),
 ):
-    message=db.query(models.Message).filter(
-        models.Message.id==msg_id
-    ).first()
+    result = await db.execute(
+        select(models.Message).where(models.Message.id==msg_id)
+    )
+    message = result.scalars().first()
     if not message:
         return
     deleted_msg=models.DeletedMessage(
@@ -27,14 +29,14 @@ def deleteForMe(
         message_id=msg_id
     )
     db.add(deleted_msg)
-    db.commit()
+    await db.commit()
     return {"message_id": msg_id, "detail": "Deleted for you"}
  
  # delete for everyone method
  # here we mark the message as deleted for everyone is true
  # and instanly pass that as deleted via websokcets
 async def delete_for_everyone(
-    db:Session,
+    db:AsyncSession,
     message_id:int,
     sender_id: int,
     receiver_id: int,
@@ -42,18 +44,19 @@ async def delete_for_everyone(
     print(f"Message ID {message_id} Sender ID {sender_id} Recv ID {receiver_id}")
     # query the message and make sure that message is sent by the sender only
     # because sender cannot delete messages from the receiver for everyone
-    message = db.query(models.Message).filter(
-        models.Message.id == message_id,
-        models.Message.sender_id == sender_id
-    ).first()
+    result = await db.execute(
+        select(models.Message).where(
+            models.Message.id == message_id,
+            models.Message.sender_id == sender_id
+        )
+    )
+    message = result.scalars().first()
     if not message:
-        # replaced the exception with return statement so that
-        # it doesnt disconnect the user
         print("Message Not Found")
         return
     # Mark as deleted for everyone
     message.is_deleted_for_everyone = True
-    db.commit()
+    await db.commit()
     # Notify BOTH users instantly
     payload = {
         "type":"delete_message",

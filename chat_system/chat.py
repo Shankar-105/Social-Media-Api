@@ -1,6 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.my_utils.socket_manager import manager
 from chat_system import delete_msg,delete_shares,dm,edit_msg,load_missed_msgs,msg_reaction,share_reaction,reply_msg,reply_to_share,media_msg,read_receipt
 import json,asyncio
@@ -14,7 +14,7 @@ async def chat(
     websocket: WebSocket,
     user_id: int,
     token: str=Query(None,description="Search query params"),
-    db: Session=Depends(db.getDb)
+    db: AsyncSession=Depends(db.getDb)
 ):
     # we check whether the token is sent or not 
     # if not sent then we close the socket connection 
@@ -24,7 +24,7 @@ async def chat(
         return
     try:
         # get the user from the token passed token
-        current_user = oauth2.getCurrentUser(token,db)
+        current_user = await oauth2.getCurrentUser(token,db)
         # if he is a different guy well then close the socket connection
         # this prevents spoofing other users acccessing or pretending to be the actual user
         if current_user.id != user_id:

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query
 from app import schemas, models, oauth2,db
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.my_utils.socket_manager import manager
 from datetime import datetime
@@ -8,13 +8,13 @@ from app.my_utils.time_formatting import format_timestamp
 async def reply_share(
     payload:schemas.ReplyToShareSchema,
     user_id:int,
-    db: Session
+    db: AsyncSession
 ):
     # Optional: Validate that shared_post exists and belongs to this chat
-    shared_post = db.query(models.SharedPost).filter(
-        models.SharedPost.id == payload.shared_post_id
-        # or vice versa depending on who sent the share
-    ).first()
+    result = await db.execute(
+        select(models.SharedPost).where(models.SharedPost.id == payload.shared_post_id)
+    )
+    shared_post = result.scalars().first()
 
     if not shared_post:
         print("Invalid or inaccessible shared post")
@@ -31,8 +31,8 @@ async def reply_share(
         media_url=payload.media_url       # this is reply to a shared post
     )
     db.add(reply_msg)
-    db.commit()
-    db.refresh(reply_msg)
+    await db.commit()
+    await db.refresh(reply_msg)
 
     # Link reply message -> shared post
     reply_link = models.SharedPostReplies(
@@ -40,10 +40,13 @@ async def reply_share(
         shared_post_id=payload.shared_post_id
     )
     db.add(reply_link)
-    db.commit()
+    await db.commit()
 
     # Load original post details for context
-    original_post = db.query(models.Post).filter(models.Post.id == shared_post.post_id).first()
+    post_result = await db.execute(
+        select(models.Post).where(models.Post.id == shared_post.post_id)
+    )
+    original_post = post_result.scalars().first()
 
     reply_payload = {
         "id": reply_msg.id,
@@ -69,7 +72,7 @@ async def reply_share(
             await manager.send_json_to_user(reply_payload,payload.to)
             reply_msg.is_read = True
             reply_msg.read_at = datetime.utcnow()
-            db.commit()
+            await db.commit()
         except:
             manager.disconnect(payload.to)
     # Send back to sender

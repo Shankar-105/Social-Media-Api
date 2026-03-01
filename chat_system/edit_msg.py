@@ -1,4 +1,5 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app import models
 from fastapi import APIRouter,Depends
 from datetime import datetime
@@ -11,37 +12,31 @@ from app.my_utils.time_formatting import format_timestamp
 router=APIRouter(tags=['can_edit'])
 
 @router.get("/msg/{msg_id}/can_edit", response_model=CanEditResponse)
-def can_edit(msg_id:int,db:Session=Depends(db.getDb),currentUser:models.User = Depends(oauth2.getCurrentUser)):
-    message = db.query(models.Message).filter(
-        models.Message.id == msg_id,
-        models.Message.sender_id == currentUser.id
-    ).first()
-    # almost impossible practically
-    # as a user cannot click for an edit over a message that doesnt exist
+async def can_edit(msg_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User = Depends(oauth2.getCurrentUser)):
+    result = await db.execute(
+        select(models.Message).where(
+            models.Message.id == msg_id,
+            models.Message.sender_id == currentUser.id
+        )
+    )
+    message = result.scalars().first()
     if not message:
         return CanEditResponse(can_edit=False, message="Message not found")
-    # if the time_difference is greater than 15 mins we say
-    # well heyy frontend dont show the edit option by replying
-    # the can_edit as false
-    # an other major thing to notice is our SQLAlchemy Messages Model
-    # is storing the time as a offset-aware datetime object
-    # so while here also while subtracting we need to be sure that 
-    # the current time we use in calculating the difference is also 
-    # a offset-aware datetime object so we do this
-    # first create an offset-aware datetime object
     
     curr_time=datetime.now(timezone.utc)
-    # and then perform a subtraction
     time_diff = curr_time - message.created_at
     if time_diff > timedelta(minutes=config.settings.max_edit_time):
         return CanEditResponse(can_edit=False)
     return CanEditResponse(can_edit=True)
     
-async def edit_message(db:Session,message_id:int,new_content:str,sender_id:int,recv_id:int):
-    message = db.query(models.Message).filter(
-        models.Message.id == message_id,
-        models.Message.sender_id == sender_id  # Only sender can edit
-    ).first()
+async def edit_message(db:AsyncSession,message_id:int,new_content:str,sender_id:int,recv_id:int):
+    result = await db.execute(
+        select(models.Message).where(
+            models.Message.id == message_id,
+            models.Message.sender_id == sender_id
+        )
+    )
+    message = result.scalars().first()
     
     if not message:
         return None
@@ -50,7 +45,6 @@ async def edit_message(db:Session,message_id:int,new_content:str,sender_id:int,r
         # No change
         payload = {
         "type":"edit_message",
-        # new content is the same old content
         "new_content":message.content,
         "message_id": message_id,
         "is_edited":False if not message.is_edited else True
@@ -64,8 +58,8 @@ async def edit_message(db:Session,message_id:int,new_content:str,sender_id:int,r
     message.is_read=False
     message.read_at=None
     message.edited_at = datetime.utcnow()
-    db.commit()
-    db.refresh(message)
+    await db.commit()
+    await db.refresh(message)
     print(message.is_read)
     payload = {
         "type":"edit_message",
@@ -75,23 +69,17 @@ async def edit_message(db:Session,message_id:int,new_content:str,sender_id:int,r
     }
     if recv_id in manager.active_connections:
                     try:
-                        # Try to send (if fails, it's a zombie)
                         await manager.send_json_to_user(payload, 
                             recv_id
                         )
                         print("Message sent via WebSocket")
                         message.is_read = True
                         message.read_at=datetime.utcnow()
-                        db.commit()
+                        await db.commit()
                         print(f"Message {message.id} marked as READ")
                     except Exception as e:
-                        # Send failed → zombie socket → remove
                         print(f"Send failed: {e}")
                         manager.disconnect(recv_id)
-                        # TODO: Later, send push notification here
     else:
-            # Offline → don't send, just save in DB
             print("Receiver offline — message saved in DB")
-            # TODO: Later, send push notification here
-        # Send response back to sender
     await manager.send_personal_message(payload,sender_id)

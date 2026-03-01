@@ -1,6 +1,7 @@
 from fastapi import APIRouter,Depends
 from app import schemas, models, oauth2, db
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.my_utils.socket_manager import manager
 from typing import List
 
@@ -10,12 +11,15 @@ router = APIRouter(tags=['shared post reactions'])
 # stored in the SharedPosts table so we query that insted of
 # the messages table
 @router.get("/shared/{shared_id}/reactions", response_model=List[schemas.ReactedUsers])
-def get_shared_post_reactions(
+async def get_shared_post_reactions(
     shared_id: int,
-    db: Session = Depends(db.getDb),
+    db: AsyncSession = Depends(db.getDb),
     currentUser: models.User = Depends(oauth2.getCurrentUser)
 ):
-    shared = db.query(models.SharedPost).filter(models.SharedPost.id == shared_id).first()
+    result = await db.execute(
+        select(models.SharedPost).where(models.SharedPost.id == shared_id)
+    )
+    shared = result.scalars().first()
     if not shared:
         print("NO Such POst found")
         return
@@ -23,11 +27,10 @@ def get_shared_post_reactions(
         print("UNknown User")
         return
 
-    reactions = (
-        db.query(models.SharedPostReaction)
-        .filter(models.SharedPostReaction.shared_post_id == shared_id)
-        .all()
+    reactions_result = await db.execute(
+        select(models.SharedPostReaction).where(models.SharedPostReaction.shared_post_id == shared_id)
     )
+    reactions = reactions_result.scalars().all()
     return [
         {
             "user_id": r.user.id,
@@ -41,11 +44,13 @@ def get_shared_post_reactions(
 async def react_to_shared_post(
     reaction: schemas.ReactionPayload,
     user_id: int,
-    db: Session
+    db: AsyncSession
 ):
-    global isNewRecord
     # message_id is nothing but share_id
-    shared = db.query(models.SharedPost).filter(models.SharedPost.id == reaction.message_id).first()
+    result = await db.execute(
+        select(models.SharedPost).where(models.SharedPost.id == reaction.message_id)
+    )
+    shared = result.scalars().first()
     if not shared:
         return {"status": "not found"}
 
@@ -55,11 +60,15 @@ async def react_to_shared_post(
         print("unauth guy")
         return {"status": "unauthorized"}
 
-    existing = db.query(models.SharedPostReaction).filter(
-        models.SharedPostReaction.shared_post_id == reaction.message_id,
-        models.SharedPostReaction.user_id == user_id
-    ).first()
+    existing_result = await db.execute(
+        select(models.SharedPostReaction).where(
+            models.SharedPostReaction.shared_post_id == reaction.message_id,
+            models.SharedPostReaction.user_id == user_id
+        )
+    )
+    existing = existing_result.scalars().first()
 
+    isNewRecord = False
     if not existing:
         isNewRecord=True
         # New reaction
@@ -73,14 +82,14 @@ async def react_to_shared_post(
     elif existing.reaction == reaction.reaction:
         isNewRecord=False
         # Toggle off
-        db.delete(existing)
+        await db.delete(existing)
         shared.reaction_cnt-=1
     else:
         isNewRecord=True
         # Change reaction
         existing.reaction = reaction.reaction
     # commit any change
-    db.commit()
+    await db.commit()
     
     payload = {
         "type": "reaction_update",

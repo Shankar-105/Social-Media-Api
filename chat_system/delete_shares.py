@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect,Depends,Query,HTTPException
 from app import schemas, models, oauth2,db
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.my_utils.socket_manager import manager
 import json,asyncio
 from datetime import datetime
@@ -11,14 +12,15 @@ router=APIRouter(tags=['delete share'])
 # stored in the SharedPosts table so we query that insted of
 # the messages table
 @router.post("/delete-share/for-me/{share_id}")
-def deleteForMe(
+async def deleteForMe(
     share_id: int,
-    db: Session=Depends(db.getDb),
+    db: AsyncSession=Depends(db.getDb),
     me: models.User = Depends(oauth2.getCurrentUser),
 ):
-    share=db.query(models.SharedPost).filter(
-        models.SharedPost.id==share_id
-    ).first()
+    result = await db.execute(
+        select(models.SharedPost).where(models.SharedPost.id==share_id)
+    )
+    share = result.scalars().first()
     if not share:
         return
     deleted_share=models.DeletedSharedPost(
@@ -26,28 +28,29 @@ def deleteForMe(
         shared_post_id=share_id
     )
     db.add(deleted_share)
-    db.commit()
+    await db.commit()
     return {"share_id": share_id, "detail": "Deleted for you"}
 
 async def delete_share_for_everyone(
-    db:Session,
+    db:AsyncSession,
     share_id:int,
     sender_id: int,
     receiver_id: int,
     ):
     print(f"Message ID {share_id} Sender ID {sender_id} Recv ID {receiver_id}")
-    share = db.query(models.SharedPost).filter(
-        models.SharedPost.id == share_id,
-        models.SharedPost.from_user_id == sender_id
-    ).first()
+    result = await db.execute(
+        select(models.SharedPost).where(
+            models.SharedPost.id == share_id,
+            models.SharedPost.from_user_id == sender_id
+        )
+    )
+    share = result.scalars().first()
     if not share:
-        # replaced the exception with return statement so that
-        # it doesnt disconnect the user
         print("Message Not Found")
         return
     # Mark as deleted for everyone
     share.is_deleted_for_everyone = True
-    db.commit()
+    await db.commit()
     # Notify BOTH users instantly
     payload = {
         "type":"share_deleted",
