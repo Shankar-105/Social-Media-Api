@@ -2,10 +2,10 @@
 Enhanced test suite for schema validation and endpoint testing
 """
 
-def test_post_response_is_proper_json_not_orm(client, get_token):
+async def test_post_response_is_proper_json_not_orm(client, get_token):
     """Verify posts return JSON dict, not ORM objects"""
     # Create a post first
-    create_resp = client.post("/posts/createPost", 
+    create_resp = await client.post("/posts/createPost", 
         data={"title": "Test JSON", "content": "Testing JSON response"},
         headers={"Authorization": f"Bearer {get_token}"})
     assert create_resp.status_code == 201
@@ -22,10 +22,10 @@ def test_post_response_is_proper_json_not_orm(client, get_token):
     assert "_sa_instance_state" not in str(post_data)
 
 
-def test_validation_errors_are_clear(client, get_token):
+async def test_validation_errors_are_clear(client, get_token):
     """Verify Pydantic validation provides clear error messages"""
     # Missing required field 'content'
-    resp = client.post("/posts/createPost",
+    resp = await client.post("/posts/createPost",
         data={"title": "Only Title"},  # Missing content field
         headers={"Authorization": f"Bearer {get_token}"})
     
@@ -36,10 +36,10 @@ def test_validation_errors_are_clear(client, get_token):
     assert any("content" in str(err).lower() for err in error["detail"])
 
 
-def test_media_urls_properly_constructed(client, get_token):
+async def test_media_urls_properly_constructed(client, get_token):
     """Verify media URLs have full paths"""
     # Get user profile pic endpoint
-    resp = client.get("/me/profile", headers={"Authorization": f"Bearer {get_token}"})
+    resp = await client.get("/me/profile", headers={"Authorization": f"Bearer {get_token}"})
     assert resp.status_code == 200
     
     profile = resp.json()
@@ -49,9 +49,9 @@ def test_media_urls_properly_constructed(client, get_token):
         assert isinstance(profile["profilePicture"], str)
 
 
-def test_pagination_metadata_structure(client, get_token):
+async def test_pagination_metadata_structure(client, get_token):
     """Verify pagination includes proper metadata"""
-    resp = client.get("/me/posts?limit=5&offset=0",
+    resp = await client.get("/me/posts?limit=5&offset=0",
         headers={"Authorization": f"Bearer {get_token}"})
     assert resp.status_code == 200
     
@@ -73,10 +73,10 @@ def test_pagination_metadata_structure(client, get_token):
     assert isinstance(pagination["has_more"], bool)
 
 
-def test_error_responses_consistent_format(client, get_token):
+async def test_error_responses_consistent_format(client, get_token):
     """Verify all error responses follow same format"""
     # Test 404 error
-    resp = client.get("/posts/getPost/999999",
+    resp = await client.get("/posts/getPost/999999",
         headers={"Authorization": f"Bearer {get_token}"})
     assert resp.status_code == 404
     error = resp.json()
@@ -84,7 +84,7 @@ def test_error_responses_consistent_format(client, get_token):
     assert isinstance(error["detail"], str)
     
     # Test validation error (422)
-    resp = client.post("/vote/on_post",
+    resp = await client.post("/vote/on_post",
         json={"invalid": "data"},  # Missing required fields
         headers={"Authorization": f"Bearer {get_token}"})
     assert resp.status_code == 422
@@ -92,10 +92,10 @@ def test_error_responses_consistent_format(client, get_token):
     assert "detail" in error
 
 
-def test_comment_list_response_schema(client, get_token):
+async def test_comment_list_response_schema(client, get_token):
     """Verify comments return proper CommentListResponse"""
     # Assuming post with id 1 exists
-    resp = client.get("/comments-on/1?limit=10&offset=0",
+    resp = await client.get("/comments-on/1?limit=10&offset=0",
         headers={"Authorization": f"Bearer {get_token}"})
     
     if resp.status_code == 200:
@@ -113,16 +113,16 @@ def test_comment_list_response_schema(client, get_token):
             assert isinstance(comment["user"], dict)
 
 
-def test_vote_response_includes_counts(client, get_token):
+async def test_vote_response_includes_counts(client, get_token):
     """Verify vote responses include like/dislike counts"""
     # Create a post to vote on
-    create_resp = client.post("/posts/createPost",
+    create_resp = await client.post("/posts/createPost",
         data={"title": "Vote Test", "content": "Testing votes"},
         headers={"Authorization": f"Bearer {get_token}"})
     post_id = create_resp.json()["id"]
     
     # Vote on the post
-    resp = client.post("/vote/on_post",
+    resp = await client.post("/vote/on_post",
         json={"post_id": post_id, "choice": True},
         headers={"Authorization": f"Bearer {get_token}"})
     
@@ -133,10 +133,10 @@ def test_vote_response_includes_counts(client, get_token):
     assert "likes" in vote_data or "dislikes" in vote_data
 
 
-def test_search_results_proper_schema(client, get_token):
+async def test_search_results_proper_schema(client, get_token):
     """Verify search returns SearchResultResponse schema"""
     # Search for users
-    resp = client.get("/search?q=test&limit=5&offset=0",
+    resp = await client.get("/search?q=test&limit=5&offset=0",
         headers={"Authorization": f"Bearer {get_token}"})
     
     assert resp.status_code == 202
@@ -149,10 +149,10 @@ def test_search_results_proper_schema(client, get_token):
     assert "users" in data or "posts" in data
 
 
-def test_follow_response_includes_count(client, get_token):
+async def test_follow_response_includes_count(client, get_token):
     """Verify follow/unfollow returns FollowResponse with count"""
     # Try to follow user 2 (assuming exists)
-    resp = client.post("/follow/2",
+    resp = await client.post("/follow/2",
         headers={"Authorization": f"Bearer {get_token}"})
     
     if resp.status_code in [201, 400]:  # 400 if already following
@@ -163,16 +163,16 @@ def test_follow_response_includes_count(client, get_token):
             assert "following_count" in data
 
 
-def test_success_response_schema(client, get_token):
+async def test_success_response_schema(client, get_token):
     """Verify success endpoints return SuccessResponse"""
     # Test delete (if we have a post to delete)
-    create_resp = client.post("/posts/createPost",
+    create_resp = await client.post("/posts/createPost",
         data={"title": "ToDelete", "content": "Will be deleted"},
         headers={"Authorization": f"Bearer {get_token}"})
     
     if create_resp.status_code == 201:
         post_id = create_resp.json()["id"]
-        delete_resp = client.delete(f"/posts/deletePost/{post_id}",
+        delete_resp = await client.delete(f"/posts/deletePost/{post_id}",
             headers={"Authorization": f"Bearer {get_token}"})
         
         assert delete_resp.status_code == 200

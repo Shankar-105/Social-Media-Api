@@ -33,8 +33,9 @@ tmp/
 data/
 __pypackages__/
 
-# ignore the alembic.ini
+# ignore the alembic.ini , pytest.ini
 alembic.ini
+pytest.ini
 
 # ignore the profile pictures and post media
 profilepics/

@@ -4,6 +4,7 @@ import app.schemas as sch
 from app import models,db,oauth2
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,func
+from sqlalchemy.orm import selectinload
 import app.my_utils.utils as utils
 import os
 from app.redis_service import get_cache, set_cache, delete_cache
@@ -100,7 +101,12 @@ async def getAllUsers(db:AsyncSession=Depends(db.getDb)):
 
 @router.get("/users/{user_id}/followers",status_code=status.HTTP_200_OK, response_model=List[sch.UserBasicResponse])
 async def get_followers(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    result=await db.execute(select(models.User).where(models.User.id == user_id))
+    # explicit selectinload needed for self-referential many-to-many in async
+    result=await db.execute(
+        select(models.User)
+        .where(models.User.id == user_id)
+        .options(selectinload(models.User.followers))
+    )
     user=result.scalars().first()
     if not user:
         raise HTTPException(status_code=404,detail="User not found")
@@ -117,7 +123,12 @@ async def get_followers(user_id:int,db:AsyncSession=Depends(db.getDb),currentUse
 
 @router.get("/users/{user_id}/following",status_code=status.HTTP_200_OK, response_model=List[sch.UserBasicResponse])
 async def get_following(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
-    result=await db.execute(select(models.User).where(models.User.id == user_id))
+    # explicit selectinload needed for self-referential many-to-many in async
+    result=await db.execute(
+        select(models.User)
+        .where(models.User.id == user_id)
+        .options(selectinload(models.User.following))
+    )
     user=result.scalars().first()
     if not user:
         raise HTTPException(status_code=404,detail="User not found")
