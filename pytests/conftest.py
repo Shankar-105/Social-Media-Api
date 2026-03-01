@@ -133,13 +133,6 @@ TestingAsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
-# ── Session-scoped event loop so all async fixtures/tests share one loop ──
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
 # pytest fixtures very helpful
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
