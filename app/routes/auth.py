@@ -5,13 +5,14 @@ from sqlalchemy import select
 import app.my_utils.utils as utils
 import app.schemas as sch
 from fastapi.security import OAuth2PasswordRequestForm
-from jose import JWTError, jwt
+from jose import JWTError
 from datetime import datetime
 import app.redis_service as redis_service
 import app.otp_service as otp_service
 import app.email_service as email_service
 
 router=APIRouter(tags=['Authentication'])
+
 @router.post("/login",status_code=status.HTTP_202_ACCEPTED)
 # method which log's in user if he has an account
 # using the built-in schema for login 'OAuth2PasswordRequestForm'
@@ -24,12 +25,12 @@ async def loginUser(userCred:OAuth2PasswordRequestForm=Depends(),db:AsyncSession
   if not isUserPresent:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"user {userCred.username} not Found")
   # if found but he entered a wrong password tell him 
-  if not utils.verifyPassword(userCred.password,isUserPresent.password):
+  if not await utils.verifyPassword(userCred.password,isUserPresent.password):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"incorrect password")
   # if both username and password verfication is successfull call
   # the createAccessToken from oauth2 file which generates an jwt token
   tokenData={"userId":isUserPresent.id,"userName":isUserPresent.username}
-  access_token=oauth2.createAccessToken(tokenData)
+  access_token=await oauth2.createAccessToken(tokenData)
   # return the access token 
   return sch.TokenModel(id=isUserPresent.id,
                         username=isUserPresent.username,
@@ -41,7 +42,8 @@ async def loginUser(userCred:OAuth2PasswordRequestForm=Depends(),db:AsyncSession
 async def logout(token: str = Depends(oauth2.oauth2_scheme)):
     try:
         # Decode the token to get the expiration time
-        payload = jwt.decode(token, oauth2.SECRET_KEY, algorithms=[oauth2.ALGORITHM])
+        # offloaded to thread pool via oauth2.decodeToken()
+        payload = await oauth2.decodeToken(token)
         expire_time = payload.get("expTime")
         if expire_time:
             # Calculate remaining time
@@ -101,7 +103,7 @@ async def reset_password(payload: sch.ResetPasswordSchema, db: AsyncSession = De
         )
 
     # Hash the new password and update the user record
-    hashed_password = utils.hashPassword(payload.new_password)
+    hashed_password = await utils.hashPassword(payload.new_password)
     user.password = hashed_password
     await db.commit()
 

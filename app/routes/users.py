@@ -71,8 +71,8 @@ async def myProfilePicture(user_id:int,db:AsyncSession=Depends(db.getDb),current
 
 @router.post("/user/signup",status_code=status.HTTP_201_CREATED,response_model=sch.UserResponse)
 async def createUser(userData:sch.UserSignupRequest=Body(...),db:AsyncSession=Depends(db.getDb)):
-    # hash the password using the bcrypt lib
-    hashedPw=utils.hashPassword(userData.password)
+    # hash the password using the bcrypt lib (offloaded to thread pool)
+    hashedPw=await utils.hashPassword(userData.password)
     userData.password=hashedPw
     newUser=models.User(**userData.dict())
     db.add(newUser)

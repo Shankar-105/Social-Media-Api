@@ -1,5 +1,6 @@
 from jose import JWTError,jwt
 from datetime import datetime,timedelta
+import asyncio
 from app import schemas as sch,models,db
 from fastapi import status,HTTPException,Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,20 +23,30 @@ ALGORITHM=cg.algorithm
 SECRET_KEY=cg.secret_key
 EXPIRE_TIME=cg.access_token_expire_time
 
-def createAccessToken(data:dict):
-    # create a copy of the data becuase
-    # we create update or add a new field to it 
-    # so the original one doesnt change
+# ── Sync helpers (CPU-bound JWT cryptography) — NEVER call these from async code directly ──
+def _createAccessToken_sync(data: dict) -> str:
+    """Synchronous JWT encode — runs on a thread pool when called via createAccessToken()."""
     dataCopy=data.copy()
-    # create some expiry time 30 mins from now the token creation
     expireTime=datetime.now()+timedelta(minutes=EXPIRE_TIME)
-    # update the data with expiry time convert it to seconds
-    # using timestamp() mtd so that serialization to json is possible
     dataCopy.update({"expTime":int(expireTime.timestamp())})
-    # encode or create a jwt token
     jwtToken=jwt.encode(dataCopy,SECRET_KEY,algorithm=ALGORITHM)
-    # return the token
     return jwtToken
+
+def _decodeToken_sync(token: str) -> dict:
+    """Synchronous JWT decode — runs on a thread pool when called via decodeToken()."""
+    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+# ── Async wrappers (offload CPU-bound JWT ops to a thread pool) ──
+# jwt.encode() uses HMAC-SHA256 (or RSA) which is CPU-bound cryptography.
+# asyncio.to_thread() pushes it off the event loop so other requests aren't blocked.
+
+async def createAccessToken(data:dict) -> str:
+    """Create a JWT token — offloaded to a thread pool to avoid blocking the event loop."""
+    return await asyncio.to_thread(_createAccessToken_sync, data)
+
+async def decodeToken(token: str) -> dict:
+    """Decode a JWT token — offloaded to a thread pool to avoid blocking the event loop."""
+    return await asyncio.to_thread(_decodeToken_sync, token)
 
 async def verifyAccesstoken(token:str,credentials_exception,dbs:AsyncSession):
     if await redis_service.is_blacklisted(token):
@@ -43,7 +54,8 @@ async def verifyAccesstoken(token:str,credentials_exception,dbs:AsyncSession):
     try:
         # decode's the token which returns a dict of the sent user info 
         # while creating a token (userId,userName) 
-        decodedToken=jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        # offloaded to thread pool via our async decodeToken() wrapper
+        decodedToken=await decodeToken(token)
         # extract those userId and userName from the returned dict
         id: int=decodedToken.get("userId")
         username: str=decodedToken.get("userName")

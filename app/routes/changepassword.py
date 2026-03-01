@@ -29,12 +29,12 @@ async def verifyOtp(db:AsyncSession,otp:str,currentUser:models.User):
 @router.post("/reset-password", response_model=schemas.SuccessResponse)
 async def reset_password(request:schemas.PasswordResetRequest=Body(...),db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
     # first check whether the user entered the correct current password
-    if not utils.verifyPassword(request.old_password,currentUser.password):
+    if not await utils.verifyPassword(request.old_password,currentUser.password):
         raise HTTPException(status_code=403,detail="your old password is incorrect")
     # then, check if it is a valid otp before letting user change password
     await verifyOtp(db,request.otp,currentUser)
-    # Hash new password (using methods in utils.py)
-    currentUser.password = utils.hashPassword(request.new_password)
+    # Hash new password (offloaded to thread pool)
+    currentUser.password = await utils.hashPassword(request.new_password)
     # Save to DB
     await db.commit()
     return schemas.SuccessResponse(message="Password changed successfully! Now login with new one.")
