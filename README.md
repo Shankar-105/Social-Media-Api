@@ -31,15 +31,6 @@ clone the repositroy and set up the environment._
 
 _Now that your setup is running, explore every endpoint this API has to offer! Check out [`API_GUIDE.md`](./API_GUIDE.md) for a detailed walkthrough of all **48 REST endpoints** and the **real-time WebSocket chat system**._
 
-**Highlights:**
-- 🔐 **Authentication flow** — Sign up, log in, and use JWT tokens
-- 👤 **Profile & Social** — User profiles, follow/unfollow, feeds
-- 📝 **Posts & Comments** — Full CRUD with media uploads, likes, and comments
-- 🔍 **Search** — Find users by name or posts by hashtag
-- 💬 **Real-Time Chat** — Direct messages, replies, reactions, typing indicators, read receipts
-- 📤 **Media** — Upload images, videos, and audio for posts and chat
-- 📊 **Analytics** — Vote stats, comment stats, engagement tracking
-
 > 💡 **Quick Start:** Visit `http://localhost:8000/docs` for the built-in Swagger UI — test endpoints right from your browser!
 
 ---
@@ -51,16 +42,6 @@ _Ready to verify everything works? Check out [`TESTS.md`](./TESTS.md) for a comp
 **Quick Test Run:**
 - 🐳 **Inside Docker** (Recommended): `docker compose exec api pytest pytests/ -v`
 - 💻 **Locally**: Install dependencies and run `pytest pytests/ -v`
-
-**What's Tested:**
-- ✅ Authentication & Authorization
-- ✅ User Management & Profiles
-- ✅ Posts CRUD Operations
-- ✅ Comments & Interactions
-- ✅ Follow/Unfollow System
-- ✅ Real-time Chat (WebSockets)
-- ✅ Search & Feed Features
-- ✅ Edge Cases & Integration Tests
 
 _All tests use a separate test database—your dev data stays safe! 🛡️_
 

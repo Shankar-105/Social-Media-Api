@@ -1,10 +1,17 @@
+import enum
 from app.db import Base
-from sqlalchemy import Column,Integer,String,Boolean,ForeignKey,Table,DateTime,UniqueConstraint
+from sqlalchemy import Column,Integer,String,Boolean,ForeignKey,Table,DateTime,UniqueConstraint,Enum
 from sqlalchemy.sql.expression import null,text
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.orm import relationship, backref
 from datetime import datetime
 from sqlalchemy.sql import func
+
+# ── Notification type enum ──
+class NotificationType(str, enum.Enum):
+    like    = "like"
+    comment = "comment"
+    follow  = "follow"
 # structure or model of the db tables
 
 connections = Table(
@@ -260,3 +267,35 @@ class SharedPostReaction(Base):
     # Relationships
     user = relationship("User", back_populates="shared_post_reactions", lazy="selectin")
     __table_args__ = (UniqueConstraint('shared_post_id', 'user_id', name='unique_shared_post_reaction'),)
+
+
+class Notification(Base):
+    """
+    Stores every notification a user receives.
+
+    owner_id  — the user who RECEIVES this notification
+    actor_id  — the user who TRIGGERED it (liked, commented, followed)
+    type      — one of: 'like', 'comment', 'follow'
+    entity_id — the post/comment being liked or commented on
+                NULL for follow notifications (no specific content entity)
+    entity_type — 'post' or 'comment' so the client knows what to navigate to
+                  NULL for follow notifications
+    text      — pre-built human-readable string: "shank liked your post"
+    is_read   — False until the user explicitly reads it (client calls PATCH)
+    """
+    __tablename__ = "notifications"
+
+    id          = Column(Integer, primary_key=True)
+    owner_id    = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    actor_id    = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    type        = Column(Enum(NotificationType), nullable=False)
+    entity_id   = Column(Integer, nullable=True)   # post_id or comment_id; NULL for follows
+    entity_type = Column(String,  nullable=True)   # "post" | "comment" | NULL
+    text        = Column(String,  nullable=False)
+    is_read     = Column(Boolean, default=False, server_default="false", nullable=False)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+
+    # who receives this notification
+    owner = relationship("User", foreign_keys=[owner_id], backref=backref("notifications", lazy="selectin"), lazy="selectin")
+    # who triggered this notification (we need their username + profile pic for the client)
+    actor = relationship("User", foreign_keys=[actor_id], lazy="selectin")
