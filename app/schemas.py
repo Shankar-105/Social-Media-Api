@@ -447,3 +447,42 @@ class ReplyToShareSchema(BaseModel):
     to: int
     
     model_config = ConfigDict(from_attributes=True)
+
+
+# ── NOTIFICATION SCHEMAS ──
+
+class ActorBasic(BaseModel):
+    """Minimal actor info embedded in a notification (who triggered it)."""
+    id: int
+    username: str
+    profile_pic: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class NotificationResponse(BaseModel):
+    """
+    Single notification as returned by GET /me/notifications.
+    The client uses entity_id + entity_type to decide which screen to open
+    when the user taps the notification.
+    """
+    id: int
+    notif_type: str          = Field(alias="type")   # "like" | "comment" | "follow"
+    actor: ActorBasic
+    text: str                                         # "shankar liked your post"
+    entity_id: Optional[int]   = None                 # post_id or comment_id
+    entity_type: Optional[str] = None                 # "post" | "comment" | None
+    is_read: bool
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+class NotificationListResponse(BaseModel):
+    """Paginated list of notifications."""
+    notifications: List[NotificationResponse]
+    unread_count: int
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+class UnreadCountResponse(BaseModel):
+    """Unread notification badge count."""
+    count: int

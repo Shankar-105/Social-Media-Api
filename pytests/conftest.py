@@ -18,10 +18,16 @@ from app.models import Base
 from app.db import getDb
 from app.config import settings
 
-# ── Mock Redis with fakeredis (no real Redis server needed for tests) ──
+# Mock Redis with fakeredis (no real Redis server needed for tests)
 import fakeredis
 from app import redis_service
 redis_service.redis_client = fakeredis.FakeAsyncRedis(decode_responses=True)
+
+# make notification_service to use the test DB session factory !
+# notification_service.create_notification() opens its own session (it can't
+# use the request's session because BackgroundTasks run after it closes).
+# so we redirect the tests to use the TestingAsyncSessionLocal so it writes to the test DB.
+from app import notification_service
 
 # SMART DATABASE HOST DETECTION FOR DOCKER vs LOCAL
 
@@ -132,6 +138,12 @@ TestingAsyncSessionLocal = async_sessionmaker(
     autoflush=False,
     expire_on_commit=False,
 )
+
+# Redirect notification background tasks to the test DB
+# notification_service.create_notification() opens its own session using
+# _session_factory.  Without this change it would try to write to the
+# production DB which doesn't have the test users, causing FK violations and other errors.
+notification_service._session_factory = TestingAsyncSessionLocal
 
 # pytest fixtures very helpful
 @pytest.fixture(scope="session", autouse=True)

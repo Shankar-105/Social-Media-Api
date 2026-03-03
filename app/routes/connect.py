@@ -1,4 +1,4 @@
-from fastapi import status,HTTPException,Depends,Body,APIRouter
+from fastapi import status,HTTPException,Depends,Body,APIRouter,BackgroundTasks
 import app.schemas as sch
 from app import models,oauth2
 from app.db import getDb
@@ -7,11 +7,13 @@ from sqlalchemy import select,and_,insert,delete,func
 from sqlalchemy.exc import IntegrityError
 from typing import List
 from app.redis_service import delete_cache
+from app.notification_service import create_notification
+from app.models import NotificationType
 
 router=APIRouter(tags=['connections'])
 
 @router.post("/follow/{user_id}",status_code=status.HTTP_201_CREATED, response_model=sch.FollowResponse)
-async def follow(user_id:int,db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def follow(user_id:int,db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser),background_tasks:BackgroundTasks=BackgroundTasks()):
     result=await db.execute(select(models.User).where(models.User.id==user_id))
     userToFollow=result.scalars().first()
     if not userToFollow:
@@ -41,6 +43,17 @@ async def follow(user_id:int,db:AsyncSession=Depends(getDb),currentUser:models.U
     # follower/following counts changed on both users — invalidate both profiles
     await delete_cache(f"user_profile:{currentUser.id}")
     await delete_cache(f"user_profile:{userToFollow.id}")
+    # Notify the followed user that someone started following them.
+    # Self-follow is already prevented above, so no extra guard needed here.
+    background_tasks.add_task(
+        create_notification,
+        actor_id=currentUser.id,
+        owner_id=userToFollow.id,
+        notif_type=NotificationType.follow,
+        actor_username=currentUser.username,
+        entity_id=None,
+        entity_type=None,
+    )
     return sch.FollowResponse(message=f"Followed user {userToFollow.username}", following_count=currentUser.following_cnt)
     
 @router.delete("/unfollow/{user_id}",status_code=status.HTTP_200_OK, response_model=sch.FollowResponse)

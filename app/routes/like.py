@@ -1,10 +1,12 @@
-from fastapi import status,HTTPException,Depends,Body,APIRouter
+from fastapi import status,HTTPException,Depends,Body,APIRouter,BackgroundTasks
 import app.schemas as sch
 from app import models,oauth2
 from app.db import getDb
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,and_
 from sqlalchemy.exc import IntegrityError
+from app.notification_service import create_notification
+from app.models import NotificationType
 
 router=APIRouter(
     tags=['likes']
@@ -12,7 +14,7 @@ router=APIRouter(
 
 @router.post("/vote/on_post",status_code=status.HTTP_201_CREATED, response_model=sch.VoteResponse)
 # get the post user that user wants to vote on with which user he is
-async def voteOnPost(post:sch.VoteRequest=Body(...),db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def voteOnPost(post:sch.VoteRequest=Body(...),db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser),background_tasks:BackgroundTasks=BackgroundTasks()):
     # search for the post he wants to vote on against the db 
     # to firstly check whether that particular post is present or not in the db
     result=await db.execute(select(models.Post).where(models.Post.id==post.post_id))
@@ -69,6 +71,18 @@ async def voteOnPost(post:sch.VoteRequest=Body(...),db:AsyncSession=Depends(getD
                 queriedPost.dis_likes += 1
             await db.commit()
             await db.refresh(queriedPost)
+            # Notify the post owner when someone LIKES their post.
+            # Only on new likes (not dislikes, not removals, not self-likes).
+            if post.choice and currentUser.id != queriedPost.user_id:
+                background_tasks.add_task(
+                    create_notification,
+                    actor_id=currentUser.id,
+                    owner_id=queriedPost.user_id,
+                    notif_type=NotificationType.like,
+                    actor_username=currentUser.username,
+                    entity_id=post.post_id,
+                    entity_type="post",
+                )
             return sch.VoteResponse(message="New vote added successfully", likes=queriedPost.likes, dislikes=queriedPost.dis_likes)
     # triggers if any thing goes wrong in db as the logic is solid
     except IntegrityError:

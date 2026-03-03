@@ -1,12 +1,14 @@
-from fastapi import Body,HTTPException,status,APIRouter,Depends,Query
+from fastapi import Body,HTTPException,status,APIRouter,Depends,Query,BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,and_,func
 from app import oauth2,models,db,schemas as sch
+from app.notification_service import create_notification
+from app.models import NotificationType
 
 router=APIRouter(tags=['comment'])
 
 @router.post("/comment",status_code=status.HTTP_201_CREATED, response_model=sch.CommentDetailResponse)
-async def createComment(comment:sch.CommentCreateRequest=Body(...),db:AsyncSession=Depends(db.getDb),currentUser: models.User = Depends(oauth2.getCurrentUser)):
+async def createComment(comment:sch.CommentCreateRequest=Body(...),db:AsyncSession=Depends(db.getDb),currentUser: models.User = Depends(oauth2.getCurrentUser),background_tasks:BackgroundTasks=BackgroundTasks()):
     # Check if the post exists
     result = await db.execute(select(models.Post).where(models.Post.id == comment.post_id))
     post = result.scalars().first()
@@ -23,7 +25,18 @@ async def createComment(comment:sch.CommentCreateRequest=Body(...),db:AsyncSessi
     post.comments_cnt += 1
     await db.commit()
     await db.refresh(new_comment)
-    
+    # Notify the post owner when someone comments on their post.
+    # Guard: no self-notification if the post owner comments on their own post.
+    if currentUser.id != post.user_id:
+        background_tasks.add_task(
+            create_notification,
+            actor_id=currentUser.id,
+            owner_id=post.user_id,
+            notif_type=NotificationType.comment,
+            actor_username=currentUser.username,
+            entity_id=comment.post_id,
+            entity_type="post",
+        )
     # Build proper response
     user = sch.UserBasicResponse(
         id=currentUser.id,

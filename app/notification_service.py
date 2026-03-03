@@ -1,0 +1,142 @@
+import json
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, func
+from app.db import AsyncSessionLocal
+from app.models import Notification, NotificationType
+from app.redis_service import redis_client
+
+# ── Patchable session factory ──
+# Mirrors exactly what redis_service.py does with redis_client.
+# In production this is AsyncSessionLocal (production DB).
+# In tests conftest.py replaces it with TestingAsyncSessionLocal so
+# background tasks write to the test DB, not the production DB.
+_session_factory = AsyncSessionLocal
+
+
+# ── Human-readable notification text builders ──
+# Lambda per type: given the actor's username, produce the display string.
+_NOTIFICATION_TEXT = {
+    NotificationType.like:    lambda actor: f"{actor} liked your post",
+    NotificationType.comment: lambda actor: f"{actor} commented on your post",
+    NotificationType.follow:  lambda actor: f"{actor} started following you",
+}
+
+
+async def create_notification(
+    actor_id: int,
+    owner_id: int,
+    notif_type: NotificationType,
+    actor_username: str,
+    entity_id: int | None = None,
+    entity_type: str | None = None,
+) -> None:
+    """
+    Persist a notification to the DB and publish it to the Redis Pub/Sub channel
+    for the target user so the live WebSocket subscriber (step 5) can push it
+    to the user if they are currently connected.
+
+    This function is designed to be called as a FastAPI BackgroundTask — it
+    creates its own DB session because by the time a background task runs the
+    original request's session is already closed and returned to the pool.
+
+    Parameters
+    ----------
+    actor_id      : user who triggered the event (the liker / commenter / follower)
+    owner_id      : user who will receive the notification
+    notif_type    : NotificationType enum value
+    actor_username: display name used to build the notification text
+    entity_id     : post_id or comment_id that the event is about (None for follows)
+    entity_type   : "post" | "comment" | None — tells the client what to navigate to
+    """
+    # Belt-and-suspenders self-notification guard.
+    # The caller already checks this, but if this function is ever called from
+    # anywhere else we never want a user to get their own notification.
+    if actor_id == owner_id:
+        return
+
+    text = _NOTIFICATION_TEXT[notif_type](actor_username)
+
+    # ── Step A: Persist to DB ──
+    # We open a FRESH session here. The route's session is already closed by
+    # the time BackgroundTasks run (FastAPI closes it when the response is sent).
+    # We use _session_factory (not AsyncSessionLocal directly) so tests can
+    # patch this module to use the test DB instead of production.
+    async with _session_factory() as db:
+        notif = Notification(
+            owner_id=owner_id,
+            actor_id=actor_id,
+            type=notif_type,
+            entity_id=entity_id,
+            entity_type=entity_type,
+            text=text,
+        )
+        db.add(notif)
+        await db.commit()
+        await db.refresh(notif)     # ← needed to get the auto-assigned id + created_at
+
+        # ── Step B: Publish to Redis Pub/Sub ──
+        # Channel name is unique per user: "notifications:42"
+        # The subscriber started in main.py (step 5) listens on this pattern and
+        # forwards the message to the user's active WebSocket if they are online.
+        # If they are offline, this publish is a no-op — the notification already
+        # lives in the DB and will be delivered on their next WebSocket connection.
+        payload = json.dumps({
+            "type":         "notification",
+            "id":           notif.id,
+            "actor_id":     actor_id,
+            "actor_username": actor_username,
+            "notif_type":   notif_type.value,       # "like" | "comment" | "follow"
+            "entity_id":    entity_id,
+            "entity_type":  entity_type,
+            "text":         text,
+            "is_read":      False,
+            "created_at":   notif.created_at.isoformat() if notif.created_at else None,
+        })
+        try:
+            await redis_client.publish(f"notifications:{owner_id}", payload)
+        except Exception:
+            # Redis is down → notification is already safely in the DB.
+            # The user will receive it via the missed-notifications delivery on
+            # their next WebSocket connect (step 6). Never crash the background task.
+            pass
+
+
+# ── REST helper functions ──
+# These are called by the notification routes added in step 7.
+# Defined here (not inside the routes) to keep the service layer clean.
+
+async def get_notifications(
+    db: AsyncSession,
+    user_id: int,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[Notification]:
+    """Return paginated notifications for a user, newest first."""
+    result = await db.execute(
+        select(Notification)
+        .where(Notification.owner_id == user_id)
+        .order_by(Notification.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return result.scalars().all()
+
+
+async def get_unread_count(db: AsyncSession, user_id: int) -> int:
+    """Return the count of unread notifications — used for the badge number."""
+    result = await db.execute(
+        select(func.count())
+        .select_from(Notification)
+        .where(Notification.owner_id == user_id, Notification.is_read == False)    # noqa: E712
+    )
+    return result.scalar() or 0
+
+
+async def mark_all_read(db: AsyncSession, user_id: int) -> None:
+    """Bulk-mark every unread notification for a user as read."""
+    await db.execute(
+        update(Notification)
+        .where(Notification.owner_id == user_id, Notification.is_read == False)    # noqa: E712
+        .values(is_read=True)
+    )
+    await db.commit()
