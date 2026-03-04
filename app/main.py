@@ -1,12 +1,14 @@
 # main.py
 import asyncio
 import json as _json
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app import models, config
 from app import redis_service as _redis_svc   # accessed via module so tests can patch redis_client
 from app.db import sync_engine
 from app.routes import changepassword, posts,users,auth,like,connect,comment,search,me,feed
+from app.routes import notifications
 from app.redis_service import check_redis_connection
 from app.my_utils.socket_manager import manager
 from chat_system import chat,chat_history,share,delete_msg,delete_shares,edit_msg,msg_info,msg_reaction,share_reaction,media_msg,clear_chat
@@ -14,9 +16,6 @@ from fastapi.middleware.cors import CORSMiddleware
 # creates tables from models.py if the tables doesnt exist
 
 models.Base.metadata.create_all(bind=sync_engine)
-
-# fastapi instance
-app = FastAPI()
 
 _listener_task: asyncio.Task | None = None
 
@@ -48,7 +47,7 @@ async def _notification_listener() -> None:
             try:
                 user_id = int(channel.split(":")[1])
                 payload = _json.loads(message["data"])
-                await manager.send_personal_message(payload, user_id)
+                await manager.send_personal_message(payload,user_id)
             except Exception:
                 # User disconnected between publish and delivery — perfectly normal.
                 # JSON decode error or key error — ignore and keep listening.
@@ -59,27 +58,31 @@ async def _notification_listener() -> None:
         raise   # re-raise so asyncio records the task as Cancelled, not Failed
 
 
-# verify Redis is reachable at startup
-# placed inside on_event so it runs after the app is fully constructed
-# (avoids firing during 'from app.main import app' in tests/conftest)
-
-@app.on_event("startup")
-async def startup_event():
+# ── Lifespan: replaces the deprecated @app.on_event("startup"/"shutdown") ────
+# asynccontextmanager turns this one function into both startup AND shutdown.
+# Everything before `yield` runs at startup; everything after runs at shutdown.
+# FastAPI passes it to FastAPI(lifespan=lifespan) and calls it when uvicorn
+# starts/stops — never at import time, so tests importing `app` are safe.
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── startup ──
     global _listener_task
     await check_redis_connection()
     _listener_task = asyncio.create_task(_notification_listener())
 
+    yield   # app is running between these two points
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cancel the notification listener task cleanly on graceful shutdown."""
-    global _listener_task
+    # ── shutdown ──
     if _listener_task:
         _listener_task.cancel()
         try:
             await _listener_task
         except asyncio.CancelledError:
             pass
+
+
+# fastapi instance — lifespan wires up the startup/shutdown hooks above
+app = FastAPI(lifespan=lifespan)
 
 # tells the uvicorn to render any images at the new paths while displaying profile pics or etc
 # example : without this mount method suppose you hit the see your profile pic endpoint
@@ -112,6 +115,7 @@ app.include_router(search.router)
 app.include_router(me.router)
 app.include_router(changepassword.router)
 app.include_router(feed.router)
+app.include_router(notifications.router)
 app.include_router(chat.router)
 app.include_router(chat_history.router)
 app.include_router(share.router)
