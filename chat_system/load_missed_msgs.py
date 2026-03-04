@@ -5,6 +5,7 @@ from sqlalchemy import select, update
 from app.my_utils.socket_manager import manager
 from datetime import datetime
 from app.my_utils.time_formatting import format_timestamp
+from app.models import Notification
 
 async def load_missed_content(
     user_id: int,
@@ -114,5 +115,33 @@ async def load_missed_content(
                 "sent_at": format_timestamp(s.created_at),
                 "is_read": s.is_read
             })
+        # On every WebSocket connect we also push any notifications the user
+        # missed while they were offline.
+        # The actor relationship is eager-loaded (lazy="selectin" on the model),
+        # so n.actor.username is available without an extra query.
+        missed_notifs_result = await db.execute(
+            select(Notification)
+            .where(
+                Notification.owner_id == user_id,
+                Notification.is_read == False,
+            )
+            .order_by(Notification.created_at.asc())
+        )
+        missed_notifs = missed_notifs_result.scalars().all()
+
+        for n in missed_notifs:
+            missed_content.append({
+                "type":           "notification",
+                "id":             n.id,
+                "notif_type":     n.type.value,          # "like" | "comment" | "follow"
+                "actor_id":       n.actor_id,
+                "actor_username": n.actor.username if n.actor else None,
+                "text":           n.text,
+                "entity_id":      n.entity_id,
+                "entity_type":    n.entity_type,
+                "timestamp":      format_timestamp(n.created_at),   # matches msgs sort key
+                "is_read":        n.is_read,
+            })
+
         missed_content.sort(key=lambda x : x.get("timestamp") if "timestamp" in  x else x.get("sent_at"))
         return missed_content

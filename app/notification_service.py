@@ -15,6 +15,7 @@ _session_factory = AsyncSessionLocal
 
 # ── Human-readable notification text builders ──
 # Lambda per type: given the actor's username, produce the display string.
+
 _NOTIFICATION_TEXT = {
     NotificationType.like:    lambda actor: f"{actor} liked your post",
     NotificationType.comment: lambda actor: f"{actor} commented on your post",
@@ -74,7 +75,7 @@ async def create_notification(
         await db.commit()
         await db.refresh(notif)     # ← needed to get the auto-assigned id + created_at
 
-        # ── Step B: Publish to Redis Pub/Sub ──
+        # Publish to Redis Pub/Sub
         # Channel name is unique per user: "notifications:42"
         # The subscriber started in main.py (step 5) listens on this pattern and
         # forwards the message to the user's active WebSocket if they are online.
