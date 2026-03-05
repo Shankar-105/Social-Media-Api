@@ -10,6 +10,7 @@ from datetime import datetime
 import app.redis_service as redis_service
 import app.otp_service as otp_service
 import app.email_service as email_service
+from app.rate_limiter import ip_rate_limit
 
 router=APIRouter(tags=['Authentication'])
 
@@ -17,7 +18,7 @@ router=APIRouter(tags=['Authentication'])
 # method which log's in user if he has an account
 # using the built-in schema for login 'OAuth2PasswordRequestForm'
 # which is equivalent to our 'sch.UserLoginCred'
-async def loginUser(userCred:OAuth2PasswordRequestForm=Depends(),db:AsyncSession=Depends(db.getDb)):
+async def loginUser(userCred:OAuth2PasswordRequestForm=Depends(),db:AsyncSession=Depends(db.getDb),_:None=Depends(ip_rate_limit("login",5,300))):
   # checks against the db for the username provided 
   result=await db.execute(select(models.User).where(models.User.username==userCred.username))
   isUserPresent=result.scalars().first()
@@ -59,7 +60,7 @@ async def logout(token: str = Depends(oauth2.oauth2_scheme)):
         )
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
-async def forgot_password(payload: sch.ForgotPasswordSchema, db: AsyncSession = Depends(db.getDb)):
+async def forgot_password(payload: sch.ForgotPasswordSchema, db: AsyncSession = Depends(db.getDb), _: None = Depends(ip_rate_limit("forgot_password", 3, 3600))):
     result = await db.execute(select(models.User).where(models.User.email == payload.email))
     user = result.scalars().first()
     if not user:
@@ -83,7 +84,7 @@ async def forgot_password(payload: sch.ForgotPasswordSchema, db: AsyncSession = 
         )
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
-async def reset_password(payload: sch.ResetPasswordSchema, db: AsyncSession = Depends(db.getDb)):
+async def reset_password(payload: sch.ResetPasswordSchema, db: AsyncSession = Depends(db.getDb), _: None = Depends(ip_rate_limit("reset_password", 5, 300))):
     # Verify OTP
     if not await otp_service.checkOtp(db, payload.email, payload.otp):
         raise HTTPException(

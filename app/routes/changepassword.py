@@ -3,11 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app import email_service,models,otp_service,schemas,db,oauth2
 from app.my_utils import utils
+from app.rate_limiter import user_rate_limit
 
 router = APIRouter(tags=["changepassword"])
 
 @router.post("/change-password", response_model=schemas.SuccessResponse)
-async def change_password(db: AsyncSession = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def change_password(db: AsyncSession = Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser),_:None=Depends(user_rate_limit("change_password_otp",3,3600))):
     # call the generate otp method in the otp_service file which generates an otp
     otp=otp_service.generateOtp()
     # save this otp in the db using the saveOtp method in the otp_sevice file 
@@ -27,7 +28,7 @@ async def verifyOtp(db:AsyncSession,otp:str,currentUser:models.User):
     raise HTTPException(status_code=400,detail="Wrong or expired OTP")
 
 @router.post("/reset-password", response_model=schemas.SuccessResponse)
-async def reset_password(request:schemas.PasswordResetRequest=Body(...),db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+async def reset_password(request:schemas.PasswordResetRequest=Body(...),db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser),_:None=Depends(user_rate_limit("reset_password_auth",5,300))):
     # first check whether the user entered the correct current password
     if not await utils.verifyPassword(request.old_password,currentUser.password):
         raise HTTPException(status_code=403,detail="your old password is incorrect")

@@ -23,6 +23,18 @@ import fakeredis
 from app import redis_service
 redis_service.redis_client = fakeredis.FakeAsyncRedis(decode_responses=True)
 
+# Disable rate limiting in tests.
+# All test requests come from the same fake IP and the test session makes far
+# more signup / post / comment calls than the production limits allow.
+# We patch _check to a no-op so every dependency returns None immediately.
+# The closures inside ip_rate_limit() and user_rate_limit() call `_check` by
+# looking it up in rate_limiter's global namespace at call-time, so replacing
+# the module attribute is all that's needed — same pattern as the fakeredis patch.
+from app import rate_limiter as _rate_limiter
+async def _noop_check(key: str, max_calls: int, window: int) -> None:
+    pass
+_rate_limiter._check = _noop_check
+
 # make notification_service to use the test DB session factory !
 # notification_service.create_notification() opens its own session (it can't
 # use the request's session because BackgroundTasks run after it closes).

@@ -1,5 +1,6 @@
 from fastapi import status,HTTPException,Depends,APIRouter,Form,UploadFile,File
 import app.schemas as sch
+from app.rate_limiter import user_rate_limit
 from typing import Optional
 from app import models,oauth2
 from app.db import getDb
@@ -75,7 +76,8 @@ async def create_post(
     content:str=Form(...),
     media:Optional[UploadFile]=File(None),  # Optional file
     db: AsyncSession=Depends(getDb),
-    currentUser:models.User=Depends(oauth2.getCurrentUser) 
+    currentUser:models.User=Depends(oauth2.getCurrentUser),
+    _:None=Depends(user_rate_limit("create_post",5,60)),
 ):
     # set to None change if uploaded later
     media_path = None

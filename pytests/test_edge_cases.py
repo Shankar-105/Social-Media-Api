@@ -138,7 +138,7 @@ async def test_comment_create_response(client, get_token):
     post_id = post_resp.json()["id"]
     
     # Create comment
-    resp = await client.post("/comment",
+    resp = await client.post("/comment/createComment",
         json={"post_id": post_id, "content": "Nice post!"},
         headers={"Authorization": f"Bearer {get_token}"})
     

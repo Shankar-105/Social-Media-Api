@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 import app.my_utils.utils as utils
 import os
 from app.redis_service import get_cache, set_cache, delete_cache
+from app.rate_limiter import ip_rate_limit
 router=APIRouter(
     tags=['Users']
 )
@@ -70,7 +71,7 @@ async def myProfilePicture(user_id:int,db:AsyncSession=Depends(db.getDb),current
     )
 
 @router.post("/user/signup",status_code=status.HTTP_201_CREATED,response_model=sch.UserResponse)
-async def createUser(userData:sch.UserSignupRequest=Body(...),db:AsyncSession=Depends(db.getDb)):
+async def createUser(userData:sch.UserSignupRequest=Body(...),db:AsyncSession=Depends(db.getDb),_:None=Depends(ip_rate_limit("signup",3,3600))):
     # hash the password using the bcrypt lib (offloaded to thread pool)
     hashedPw=await utils.hashPassword(userData.password)
     userData.password=hashedPw
