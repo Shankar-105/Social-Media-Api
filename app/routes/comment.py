@@ -4,12 +4,12 @@ from sqlalchemy import select,and_,func
 from app import oauth2,models,db,schemas as sch
 from app.notification_service import create_notification
 from app.models import NotificationType
-from app.rate_limiter import user_rate_limit
+from app.rate_limiter import comment_limiter
 
 router=APIRouter(tags=['comment'])
 
 @router.post("/comment/createComment",status_code=status.HTTP_201_CREATED, response_model=sch.CommentDetailResponse)
-async def createComment(comment:sch.CommentCreateRequest=Body(...),db:AsyncSession=Depends(db.getDb),currentUser: models.User = Depends(oauth2.getCurrentUser),background_tasks:BackgroundTasks=BackgroundTasks(),_:None=Depends(user_rate_limit("comment",10,60))):
+async def createComment(comment:sch.CommentCreateRequest=Body(...),db:AsyncSession=Depends(db.getDb),currentUser: models.User = Depends(oauth2.getCurrentUser),background_tasks:BackgroundTasks=BackgroundTasks(),_:None=Depends(comment_limiter)):
     # Check if the post exists
     result = await db.execute(select(models.Post).where(models.Post.id == comment.post_id))
     post = result.scalars().first()

@@ -31,6 +31,25 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    # rate limiting — max hits and window (seconds) per endpoint
+    rl_login_max: int = 5
+    rl_login_window: int = 300
+    rl_signup_max: int = 3
+    rl_signup_window: int = 3600
+    rl_forgot_password_max: int = 3
+    rl_forgot_password_window: int = 3600
+    rl_reset_password_max: int = 5
+    rl_reset_password_window: int = 300
+    rl_change_password_max: int = 3
+    rl_change_password_window: int = 3600
+    rl_reset_password_auth_max: int = 5
+    rl_reset_password_auth_window: int = 300
+    rl_comment_max: int = 10
+    rl_comment_window: int = 60
+    rl_create_post_max: int = 5
+    rl_create_post_window: int = 60
+    rl_follow_max: int = 20
+    rl_follow_window: int = 60
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

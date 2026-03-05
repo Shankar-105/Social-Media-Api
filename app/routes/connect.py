@@ -9,12 +9,12 @@ from typing import List
 from app.redis_service import delete_cache
 from app.notification_service import create_notification
 from app.models import NotificationType
-from app.rate_limiter import user_rate_limit
+from app.rate_limiter import follow_limiter
 
 router=APIRouter(tags=['connections'])
 
 @router.post("/follow/{user_id}",status_code=status.HTTP_201_CREATED, response_model=sch.FollowResponse)
-async def follow(user_id:int,db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser),background_tasks:BackgroundTasks=BackgroundTasks(),_:None=Depends(user_rate_limit("follow",20,60))):
+async def follow(user_id:int,db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser),background_tasks:BackgroundTasks=BackgroundTasks(),_:None=Depends(follow_limiter)):
     result=await db.execute(select(models.User).where(models.User.id==user_id))
     userToFollow=result.scalars().first()
     if not userToFollow:
