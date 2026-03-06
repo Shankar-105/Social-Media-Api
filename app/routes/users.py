@@ -7,7 +7,7 @@ from sqlalchemy import select,func
 from sqlalchemy.orm import selectinload
 import app.my_utils.utils as utils
 import os
-from app.redis_service import get_cache, set_cache, delete_cache
+from app.redis_service import get_cache, set_cache, delete_cache, delete_cache_pattern
 from app.rate_limiter import signup_limiter
 router=APIRouter(
     tags=['Users']
@@ -26,6 +26,8 @@ async def userProfile(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:
     # Cache MISS → query the database
     result=await db.execute(select(models.User).where(models.User.id==user_id))
     user=result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="User not found")
     
     # Check if current user follows this user
     is_following = user in currentUser.following
@@ -102,6 +104,12 @@ async def getAllUsers(db:AsyncSession=Depends(db.getDb)):
 
 @router.get("/users/{user_id}/followers",status_code=status.HTTP_200_OK, response_model=List[sch.UserBasicResponse])
 async def get_followers(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    # Check Redis cache
+    cache_key = f"followers:{user_id}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return cached
+
     # explicit selectinload needed for self-referential many-to-many in async
     result=await db.execute(
         select(models.User)
@@ -120,10 +128,17 @@ async def get_followers(user_id:int,db:AsyncSession=Depends(db.getDb),currentUse
             nickname=follower.nickname,
             profile_pic=follower.profile_picture
         ))
+    await set_cache(cache_key, [f.model_dump(mode="json") for f in followers], ttl=120)
     return followers
 
 @router.get("/users/{user_id}/following",status_code=status.HTTP_200_OK, response_model=List[sch.UserBasicResponse])
 async def get_following(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    # Check Redis cache
+    cache_key = f"following:{user_id}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return cached
+
     # explicit selectinload needed for self-referential many-to-many in async
     result=await db.execute(
         select(models.User)
@@ -142,6 +157,7 @@ async def get_following(user_id:int,db:AsyncSession=Depends(db.getDb),currentUse
             nickname=followed_user.nickname,
             profile_pic=followed_user.profile_picture
         ))
+    await set_cache(cache_key, [f.model_dump(mode="json") for f in following], ttl=120)
     return following
 
 @router.get("/users/{user_id}/posts", response_model=sch.PostListResponse)  
@@ -150,6 +166,12 @@ async def getAllPosts(user_id:int,limit:int=Query(10, ge=1, le=100),
     db:AsyncSession=Depends(db.getDb),
     currentUser:models.User=Depends(oauth2.getCurrentUser)
     ):
+    # Check Redis cache
+    cache_key = f"user:posts:{user_id}:{offset}:{limit}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return cached
+
     # calculate the total number of posts of the user
     countResult=await db.execute(select(func.count()).select_from(models.Post).where(models.Post.user_id==user_id))
     total=countResult.scalar()
@@ -181,7 +203,9 @@ async def getAllPosts(user_id:int,limit:int=Query(10, ge=1, le=100),
         has_more=(limit+offset)<total
     )
     
-    return sch.PostListResponse(
+    result = sch.PostListResponse(
         posts=posts,
         pagination=pagination
     )
+    await set_cache(cache_key, result.model_dump(mode="json"), ttl=60)
+    return result

@@ -13,4 +13,4 @@ async def test_login_wrong_password(client, create_test_user):
         "password": "wrongpassword",
     }
     resp = await client.post("/login", data=data)
-    assert resp.status_code == 404
+    assert resp.status_code == 401

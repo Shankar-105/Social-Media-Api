@@ -6,7 +6,7 @@ import app.my_utils.utils as utils
 import app.schemas as sch
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError
-from datetime import datetime
+from datetime import datetime, timezone
 import app.redis_service as redis_service
 import app.otp_service as otp_service
 import app.email_service as email_service
@@ -24,10 +24,10 @@ async def loginUser(userCred:OAuth2PasswordRequestForm=Depends(),db:AsyncSession
   isUserPresent=result.scalars().first()
   # if not found tell the user not found
   if not isUserPresent:
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"user {userCred.username} not Found")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail="Invalid credentials")
   # if found but he entered a wrong password tell him 
   if not await utils.verifyPassword(userCred.password,isUserPresent.password):
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"incorrect password")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail="Invalid credentials")
   # if both username and password verfication is successfull call
   # the createAccessToken from oauth2 file which generates an jwt token
   tokenData={"userId":isUserPresent.id,"userName":isUserPresent.username}
@@ -59,8 +59,8 @@ async def logout(token: str = Depends(oauth2.oauth2_scheme), db: AsyncSession = 
         payload = await oauth2.decodeToken(token)
         expire_time = payload.get("expTime")
         if expire_time:
-            # Calculate remaining time
-            remaining_time = expire_time - datetime.now().timestamp()
+            # Calculate remaining time (use UTC to match token creation)
+            remaining_time = expire_time - datetime.now(timezone.utc).timestamp()
             if remaining_time > 0:
                 # Add token to blacklist with remaining time as TTL
                 await redis_service.add_to_blacklist(token, int(remaining_time))

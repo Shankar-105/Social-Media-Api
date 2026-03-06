@@ -5,6 +5,7 @@ from app import oauth2,models,db,schemas as sch
 from app.notification_service import create_notification
 from app.models import NotificationType
 from app.rate_limiter import comment_limiter
+from app.redis_service import get_cache, set_cache, delete_cache_pattern
 
 router=APIRouter(tags=['comment'])
 
@@ -26,6 +27,10 @@ async def createComment(comment:sch.CommentCreateRequest=Body(...),db:AsyncSessi
     post.comments_cnt += 1
     await db.commit()
     await db.refresh(new_comment)
+    # Invalidate cached comments for this post and post detail caches
+    await delete_cache_pattern(f"comments:post:{comment.post_id}:*")
+    await delete_cache_pattern(f"post:{comment.post_id}:*")
+    await delete_cache_pattern("feed:*")
     # Notify the post owner when someone comments on their post.
     # Guard: no self-notification if the post owner comments on their own post.
     if currentUser.id != post.user_id:
@@ -63,6 +68,9 @@ async def deleteComment(comment_id:int,db:AsyncSession=Depends(db.getDb),current
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"comment with Id {comment_id} not Found") 
     await db.delete(commentTodelete)
     await db.commit()
+    # Invalidate cached comments for this post
+    await delete_cache_pattern(f"comments:post:{commentTodelete.post_id}:*")
+    await delete_cache_pattern(f"post:{commentTodelete.post_id}:*")
     return sch.SuccessResponse(message=f"Comment {comment_id} deleted successfully")
 
 @router.patch("/comments/edit_comment/{comment_id}",status_code=status.HTTP_200_OK, response_model=sch.CommentDetailResponse)
@@ -74,6 +82,8 @@ async def editComment(comment_id:int,editInfo:sch.CommentUpdateRequest=Body(...)
     commentToBeEdited.comment_content=editInfo.comment_content
     await db.commit()
     await db.refresh(commentToBeEdited)
+    # Invalidate cached comments for this post
+    await delete_cache_pattern(f"comments:post:{commentToBeEdited.post_id}:*")
     
     # Build proper response
     user = sch.UserBasicResponse(
@@ -99,6 +109,12 @@ async def getAllPosts(post_id:int,
     db:AsyncSession=Depends(db.getDb),
     currentUser:models.User=Depends(oauth2.getCurrentUser)
     ):
+    # Check Redis cache first
+    cache_key = f"comments:post:{post_id}:{offset}:{limit}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return cached
+
     # calculate the total number of comments on the post
     countResult=await db.execute(select(func.count()).select_from(models.Comments).where(models.Comments.post_id==post_id))
     total=countResult.scalar()
@@ -132,7 +148,9 @@ async def getAllPosts(post_id:int,
         has_more=(limit+offset)<total
     )
     
-    return sch.CommentListResponse(
+    result = sch.CommentListResponse(
         comments=commentsResponse,
         pagination=pagination
     )
+    await set_cache(cache_key, result.model_dump(mode="json"), ttl=30)
+    return result

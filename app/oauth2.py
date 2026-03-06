@@ -1,5 +1,5 @@
 from jose import JWTError,jwt
-from datetime import datetime,timedelta
+from datetime import datetime,timedelta,timezone
 import asyncio
 from app import schemas as sch,models,db
 from fastapi import status,HTTPException,Depends
@@ -27,14 +27,18 @@ EXPIRE_TIME=cg.access_token_expire_time
 def _createAccessToken_sync(data: dict) -> str:
     """Synchronous JWT encode — runs on a thread pool when called via createAccessToken()."""
     dataCopy=data.copy()
-    expireTime=datetime.now()+timedelta(minutes=EXPIRE_TIME)
+    expireTime=datetime.now(timezone.utc)+timedelta(minutes=EXPIRE_TIME)
     dataCopy.update({"expTime":int(expireTime.timestamp())})
     jwtToken=jwt.encode(dataCopy,SECRET_KEY,algorithm=ALGORITHM)
     return jwtToken
 
 def _decodeToken_sync(token: str) -> dict:
     """Synchronous JWT decode — runs on a thread pool when called via decodeToken()."""
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    exp = payload.get("expTime")
+    if exp is None or datetime.fromtimestamp(exp, tz=timezone.utc) < datetime.now(timezone.utc):
+        raise JWTError("Token has expired")
+    return payload
 
 # ── Async wrappers (offload CPU-bound JWT ops to a thread pool) ──
 # jwt.encode() uses HMAC-SHA256 (or RSA) which is CPU-bound cryptography.

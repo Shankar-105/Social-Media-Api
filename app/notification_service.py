@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func
 from app.db import AsyncSessionLocal
 from app.models import Notification, NotificationType
-from app.redis_service import redis_client
+from app.redis_service import redis_client, delete_cache_pattern
 
 # ── Patchable session factory ──
 # Mirrors exactly what redis_service.py does with redis_client.
@@ -74,6 +74,10 @@ async def create_notification(
         db.add(notif)
         await db.commit()
         await db.refresh(notif)     # ← needed to get the auto-assigned id + created_at
+
+        # Invalidate notification caches for the recipient
+        await delete_cache_pattern(f"notifications:{owner_id}:*")
+        await delete_cache_pattern(f"notif:unread:{owner_id}")
 
         # Publish to Redis Pub/Sub
         # Channel name is unique per user: "notifications:42"

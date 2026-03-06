@@ -7,6 +7,7 @@ from sqlalchemy import select,and_
 from sqlalchemy.exc import IntegrityError
 from app.notification_service import create_notification
 from app.models import NotificationType
+from app.redis_service import delete_cache_pattern
 
 router=APIRouter(
     tags=['likes']
@@ -42,6 +43,8 @@ async def voteOnPost(post:sch.VoteRequest=Body(...),db:AsyncSession=Depends(getD
                     queriedPost.dis_likes-= 1
                 await db.commit()
                 await db.refresh(queriedPost)
+                await delete_cache_pattern(f"post:{post.post_id}:*")
+                await delete_cache_pattern("feed:*")
                 return sch.VoteResponse(message="Vote removed successfully", likes=queriedPost.likes, dislikes=queriedPost.dis_likes)
             else:
                 # Switching vote (e.g., like to dislike or vice versa)
@@ -54,6 +57,8 @@ async def voteOnPost(post:sch.VoteRequest=Body(...),db:AsyncSession=Depends(getD
                     queriedPost.dis_likes += 1
                 await db.commit()
                 await db.refresh(queriedPost)
+                await delete_cache_pattern(f"post:{post.post_id}:*")
+                await delete_cache_pattern("feed:*")
                 return sch.VoteResponse(message="Vote switched successfully", likes=queriedPost.likes, dislikes=queriedPost.dis_likes)
         else:
             # New vote
@@ -71,6 +76,8 @@ async def voteOnPost(post:sch.VoteRequest=Body(...),db:AsyncSession=Depends(getD
                 queriedPost.dis_likes += 1
             await db.commit()
             await db.refresh(queriedPost)
+            await delete_cache_pattern(f"post:{post.post_id}:*")
+            await delete_cache_pattern("feed:*")
             # Notify the post owner when someone LIKES their post.
             # Only on new likes (not dislikes, not removals, not self-likes).
             if post.choice and currentUser.id != queriedPost.user_id:

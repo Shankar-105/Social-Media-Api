@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,func,desc
 from typing import List
 from app import models, schemas, oauth2 , db
+from app.redis_service import get_cache, set_cache, delete_cache
 import os
 
 router = APIRouter(tags=["Feed"])
@@ -13,6 +14,12 @@ async def getHomeFeed(limit:int=Query(10, ge=1, le=100),
     db:AsyncSession=Depends(db.getDb),
     currentUser:models.User=Depends(oauth2.getCurrentUser)
     ):
+    # Check Redis cache first (per-user, per-page)
+    cache_key = f"feed:home:{currentUser.id}:{offset}:{limit}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return cached
+
     # Get users the current user follows via connections table
     followingResult = await db.execute(
         select(models.connections.c.followed_id).where(models.connections.c.follower_id == currentUser.id)
@@ -64,7 +71,9 @@ async def getHomeFeed(limit:int=Query(10, ge=1, le=100),
             owner=owner
         ))
     
-    return schemas.FeedResponse(feed=user_homeFeed, total=total)
+    result = schemas.FeedResponse(feed=user_homeFeed, total=total)
+    await set_cache(cache_key, result.model_dump(mode="json"), ttl=30)
+    return result
 
 @router.get("/feed/explore", response_model=schemas.PostListResponse)
 async def getExploreFeed(limit:int=Query(20, ge=1, le=100),
@@ -72,6 +81,12 @@ async def getExploreFeed(limit:int=Query(20, ge=1, le=100),
     db:AsyncSession=Depends(db.getDb),
     currentUser:models.User=Depends(oauth2.getCurrentUser)
     ):
+    # Check Redis cache (per-user because is_liked differs per user)
+    cache_key = f"feed:explore:{currentUser.id}:{offset}:{limit}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return cached
+
     # For explore, get all posts (or random) - excluding potentially private ones if that existed
     # Simple implementation: All recent posts
     countResult = await db.execute(select(func.count()).select_from(models.Post))
@@ -114,4 +129,6 @@ async def getExploreFeed(limit:int=Query(20, ge=1, le=100),
         has_more=(limit+offset)<total
     )
     
-    return schemas.PostListResponse(posts=explore_posts, pagination=pagination)
+    result = schemas.PostListResponse(posts=explore_posts, pagination=pagination)
+    await set_cache(cache_key, result.model_dump(mode="json"), ttl=60)
+    return result

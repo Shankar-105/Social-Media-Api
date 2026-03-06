@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,and_,insert,delete,func
 from sqlalchemy.exc import IntegrityError
 from typing import List
-from app.redis_service import delete_cache
+from app.redis_service import delete_cache, delete_cache_pattern
 from app.notification_service import create_notification
 from app.models import NotificationType
 from app.rate_limiter import follow_limiter
@@ -44,6 +44,11 @@ async def follow(user_id:int,db:AsyncSession=Depends(getDb),currentUser:models.U
     # follower/following counts changed on both users — invalidate both profiles
     await delete_cache(f"user_profile:{currentUser.id}")
     await delete_cache(f"user_profile:{userToFollow.id}")
+    # Invalidate followers/following list caches
+    await delete_cache(f"followers:{userToFollow.id}")
+    await delete_cache(f"following:{currentUser.id}")
+    # Invalidate home feed cache for the follower (new posts appear)
+    await delete_cache_pattern(f"feed:home:{currentUser.id}:*")
     # Notify the followed user that someone started following them.
     # Self-follow is already prevented above, so no extra guard needed here.
     background_tasks.add_task(
@@ -90,6 +95,10 @@ async def unfollow(user_id:int,db:AsyncSession=Depends(getDb),currentUser:models
     # follower/following counts changed on both users — invalidate both profiles
     await delete_cache(f"user_profile:{currentUser.id}")
     await delete_cache(f"user_profile:{userToUnFollow.id}")
+    # Invalidate followers/following list caches
+    await delete_cache(f"followers:{userToUnFollow.id}")
+    await delete_cache(f"following:{currentUser.id}")
+    await delete_cache_pattern(f"feed:home:{currentUser.id}:*")
     return sch.FollowResponse(message=f"Unfollowed user {userToUnFollow.username}", following_count=currentUser.following_cnt)
 
 @router.delete("/remove_follower/{user_id}", status_code=status.HTTP_200_OK, response_model=sch.FollowResponse)
@@ -129,6 +138,9 @@ async def remove_follower(user_id: int, db: AsyncSession = Depends(getDb), curre
     # follower/following counts changed on both users — invalidate both profiles
     await delete_cache(f"user_profile:{currentUser.id}")
     await delete_cache(f"user_profile:{userToRemove.id}")
+    # Invalidate followers/following list caches
+    await delete_cache(f"followers:{currentUser.id}")
+    await delete_cache(f"following:{userToRemove.id}")
     return sch.FollowResponse(message=f"Removed follower {userToRemove.username}", following_count=currentUser.following_cnt)
 
 @router.get("/users/{user_id}/followers", response_model=List[sch.UserBasicResponse])

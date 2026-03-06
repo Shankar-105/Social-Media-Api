@@ -4,6 +4,7 @@ from app.rate_limiter import create_post_limiter
 from typing import Optional
 from app import models,oauth2
 from app.db import getDb
+from app.redis_service import get_cache, set_cache, delete_cache, delete_cache_pattern
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,and_
 import os,uuid,shutil
@@ -17,6 +18,12 @@ router=APIRouter(
 # gets a specific post with id -> {postId}
 @router.get("/posts/getPost/{postId}", response_model=sch.PostDetailResponse)
 async def getPost(postId:int,db:AsyncSession=Depends(getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    # Check Redis cache first
+    cache_key = f"post:{postId}:{currentUser.id}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return cached
+
     result=await db.execute(select(models.Post).where(and_(models.Post.id==postId,models.Post.user_id==currentUser.id)))
     reqPost=result.scalars().first()
     if reqPost==None:
@@ -51,7 +58,7 @@ async def getPost(postId:int,db:AsyncSession=Depends(getDb),currentUser:models.U
         profile_pic=reqPost.user.profile_picture
     )
     
-    return sch.PostDetailResponse(
+    result_response = sch.PostDetailResponse(
         id=reqPost.id,
         title=reqPost.title,
         content=reqPost.content,
@@ -67,6 +74,8 @@ async def getPost(postId:int,db:AsyncSession=Depends(getDb),currentUser:models.U
         is_liked=is_liked,
         owner=owner
     )
+    await set_cache(cache_key, result_response.model_dump(mode="json"), ttl=120)
+    return result_response
 
 
 # creates a new post using sqlAlchemy
@@ -108,6 +117,9 @@ async def create_post(
     db.add(new_post)
     await db.commit()
     await db.refresh(new_post)
+    # Invalidate feed and user posts caches
+    await delete_cache_pattern("feed:*")
+    await delete_cache_pattern(f"user:posts:{currentUser.id}:*")
     
     # Build proper response
     media_url = None
@@ -150,6 +162,11 @@ async def deletePost(postId:int,db:AsyncSession=Depends(getDb),currentUser:model
             await asyncio.to_thread(os.remove, media_path)
     await db.delete(postToDelete)
     await db.commit()
+    # Invalidate caches for this post, feeds, and user posts
+    await delete_cache_pattern(f"post:{postId}:*")
+    await delete_cache_pattern("feed:*")
+    await delete_cache_pattern(f"user:posts:{currentUser.id}:*")
+    await delete_cache_pattern(f"comments:post:{postId}:*")
     return sch.SuccessResponse(message=f"Post {postToDelete.id} deleted successfully")
 
 # update a specific post with id -> {id}
@@ -172,6 +189,9 @@ async def editPost(postId:int,post:sch.PostUpdateRequest,db:AsyncSession=Depends
     # if not refreshed below returned postToUpdate will be
     # sent as {} to the front End
     await db.refresh(postToUpdate)
+    # Invalidate cached post data and feeds
+    await delete_cache_pattern(f"post:{postId}:*")
+    await delete_cache_pattern("feed:*")
     
     # Build proper response
     media_url = None
