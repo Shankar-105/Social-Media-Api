@@ -9,7 +9,10 @@
 | Section | What It Covers |
 |---------|---------------|
 | [Async & Non-Blocking Architecture](#-async--non-blocking-architecture) | Event-loop design, thread-pool offloading, async DB & cache |
-| [Authentication & Security](#-authentication--security) | JWT, bcrypt, token blacklist, logout, OTP |
+| [Authentication & Security](#-authentication--security) | JWT with expiry verification, bcrypt, token blacklist, logout, OTP |
+| [Refresh Token Rotation](#-refresh-token-rotation) | Opaque refresh tokens, family-based revocation, silent re-auth |
+| [Rate Limiting](#-rate-limiting) | IP-based & user-based throttling, configurable per endpoint |
+| [Notifications](#-notifications) | Real-time push via Redis Pub/Sub + WebSocket, persistent storage |
 | [User Profiles](#-user-profiles) | Bio, nickname, profile picture, update flow |
 | [Follow / Unfollow System](#-follow--unfollow-system) | Follow, unfollow, remove follower, counts |
 | [Posts](#-posts) | CRUD, media uploads, views, hashtags |
@@ -21,12 +24,12 @@
 | [Real-Time Chat (WebSockets)](#-real-time-chat-websockets) | Direct messages, media, typing, reactions, read receipts |
 | [Message Controls](#-message-controls) | Reply, edit, delete for me, delete for everyone, clear chat |
 | [Post Sharing into DMs](#-post-sharing-into-dms) | Share posts, react to shares, reply to shares |
-| [Redis Caching & Token Blacklisting](#-redis-caching--token-blacklisting) | Response caching, cache invalidation, secure logout |
+| [Redis Caching & Token Blacklisting](#-redis-caching--token-blacklisting) | Response caching across 11+ endpoints, pattern-based invalidation, secure logout |
 | [Media & File Management](#-media--file-management) | Profile pics, post media, chat media, static serving |
 | [Database & Migrations](#-database--migrations) | PostgreSQL, SQLAlchemy 2.0, Alembic, async sessions |
 | [DevOps & Docker](#-devops--docker) | Docker Compose, multi-service stack, volumes, auto-restart |
 | [API Documentation](#-api-documentation) | Swagger UI, ReDoc, Pydantic schemas |
-| [Testing](#-testing) | Pytest, isolated test DB, integration tests |
+| [Testing](#-testing) | Pytest, isolated test DB, 50+ integration tests |
 | [Human-Readable Timestamps](#-human-readable-timestamps) | "5 min ago", "Yesterday at 3:45 PM" formatting |
 
 ---
@@ -50,13 +53,69 @@ The entire backend is built on an **async-first** philosophy — from the first 
 ## 🔐 Authentication & Security
 
 - **JWT access tokens** with configurable expiry time — generated using HMAC-SHA256 via `python-jose`
+- **Explicit JWT expiry verification** — every token decode checks the `expTime` claim against `datetime.now(timezone.utc)`; expired tokens are rejected immediately with a clear error
+- **UTC-aware timestamps everywhere** — token creation, expiry checks, and blacklist TTL calculations all use `timezone.utc` to prevent clock-skew issues
 - **Secure password hashing** using `bcrypt` with automatic salt generation
-- **Token-based logout** — on logout, the JWT is added to a Redis blacklist with its remaining TTL, ensuring immediate invalidation even before natural expiry
+- **Token-based logout** — on logout, the JWT is added to a Redis blacklist with its remaining TTL, and **all refresh tokens** for that user are revoked (forces re-login on every device)
 - **Blacklist check on every request** — every protected endpoint verifies the token hasn't been blacklisted before processing
 - **OAuth2PasswordBearer** scheme — extracts the JWT from the `Authorization: Bearer <token>` header automatically
-- **User enumeration prevention** — the forgot-password endpoint returns a generic success message regardless of whether the email exists, preventing attackers from discovering valid accounts
+- **User enumeration prevention** — login returns a generic `"Invalid credentials"` message with `401` for both wrong username and wrong password; forgot-password returns a generic success message regardless of whether the email exists
 - **Form-based login** — uses FastAPI's built-in `OAuth2PasswordRequestForm` for standards-compliant login
 - **CORS middleware** — Cross-Origin Resource Sharing enabled for frontend integration
+
+---
+
+## 🔄 Refresh Token Rotation
+
+A production-grade refresh token system with **family-based revocation** for maximum security.
+
+- **Opaque refresh tokens** — generated via `secrets.token_urlsafe(32)`, not JWTs. Stored securely in PostgreSQL with bcrypt-hashed values
+- **Token rotation on every refresh** — calling `POST /refresh` issues a new access + refresh token pair and immediately revokes the old refresh token
+- **Family-based revocation** — each login session gets a unique `family_id` (UUID). If a revoked token is reused (replay attack), the **entire family** is revoked, forcing re-login on all devices in that session
+- **Configurable expiry** — refresh tokens expire after `REFRESH_TOKEN_EXPIRE_DAYS` (default: 7 days), set via `.env`
+- **Logout nukes all tokens** — `POST /logout` blacklists the access token and revokes every refresh token for that user across all devices
+- **Password change revokes sessions** — changing your password automatically revokes all refresh tokens, preventing stale sessions from silently refreshing
+
+---
+
+## 🛡️ Rate Limiting
+
+IP-based and user-based throttling to protect against abuse, brute-force attacks, and spam.
+
+- **Two strategies:**
+  - **IP-based** — throttles by client IP address (login, signup, forgot-password, reset-password, refresh)
+  - **User-based** — throttles by authenticated user ID (change-password OTP, authenticated reset-password, create comment, create post, follow)
+- **Redis-backed counters** — atomic `INCR` + `EXPIRE` in Redis; counters survive app restarts
+- **Configurable per endpoint** via `.env`:
+  | Endpoint | Default Limit | Window |
+  |----------|--------------|--------|
+  | Login | 5 requests | 5 min |
+  | Signup | 3 requests | 1 hour |
+  | Forgot Password | 3 requests | 1 hour |
+  | Reset Password | 5 requests | 5 min |
+  | Refresh Token | 10 requests | 1 min |
+  | Change Password OTP | 3 requests | 1 hour |
+  | Create Comment | 10 requests | 1 min |
+  | Create Post | 5 requests | 1 min |
+  | Follow | 20 requests | 1 min |
+- **Proper 429 responses** — returns `HTTP 429 Too Many Requests` with a `Retry-After` header indicating when the client can retry
+- **Graceful degradation** — if Redis is down, rate limiting is bypassed rather than breaking the API
+
+---
+
+## 🔔 Notifications
+
+Real-time notification system with persistent storage and live delivery.
+
+- **Notification types:** `like`, `comment`, `follow` — generated automatically when a user interacts with your content
+- **Persistent storage** — all notifications saved in a dedicated `notifications` table with `owner_id`, `actor_id`, `type`, `entity_id`, `entity_type`, `text`, `is_read`, and `created_at`
+- **Real-time delivery** — notifications are published to a Redis Pub/Sub channel; if the target user has an active WebSocket connection, the notification is pushed instantly
+- **REST endpoints:**
+  - `GET /me/notifications` — paginated notification list (cached 20s in Redis)
+  - `GET /me/notifications/unread-count` — unread badge count (cached 20s)
+  - `PATCH /me/notifications/read` — mark all as read (invalidates caches)
+- **Automatic cache invalidation** — creating a new notification clears the target user's notification caches so they see fresh data on next request
+- **No self-notifications** — liking your own post or following yourself doesn't generate a notification
 
 ---
 
@@ -222,9 +281,27 @@ A production-grade 1-on-1 chat system running over a single persistent WebSocket
 
 ## 🚀 Redis Caching & Token Blacklisting
 
-- **Response caching** — frequently accessed endpoints (user profiles, all users list) are cached in Redis with configurable TTL
-- **Cache invalidation** — caches are automatically deleted when underlying data changes (e.g., user signup invalidates the "all users" cache, profile update invalidates that user's cached profile)
-- **Pattern-based invalidation** — `delete_cache_pattern("user_profile:*")` to bust all user profile caches at once using `SCAN` (non-blocking, unlike `KEYS`)
+- **Response caching across 11+ endpoints** — frequently accessed data is cached in Redis with endpoint-specific TTLs:
+  | Cached Endpoint | Cache Key Pattern | TTL |
+  |----------------|-------------------|-----|
+  | User profile | `user_profile:{id}` | 120s |
+  | All users list | `all_users` | 120s |
+  | Home feed | `feed:home:{user}:{offset}:{limit}` | 30s |
+  | Explore feed | `feed:explore:{user}:{offset}:{limit}` | 60s |
+  | Post detail | `post:{id}:{user}` | 120s |
+  | Comments on post | `comments:post:{id}:{offset}:{limit}` | 30s |
+  | User's followers | `followers:{user_id}` | 120s |
+  | User's following | `following:{user_id}` | 120s |
+  | User's posts | `user:posts:{id}:{offset}:{limit}` | 60s |
+  | Notifications | `notifications:{user}:{offset}:{limit}` | 20s |
+  | Unread count | `notif:unread:{user}` | 20s |
+- **Automatic cache invalidation on writes** — every mutating operation clears related caches:
+  - Post create/edit/delete → clears `post:*`, `feed:*`, `user:posts:*`
+  - Comment create/edit/delete → clears `comments:post:*`, `post:*`
+  - Vote add/remove/switch → clears `post:*`, `feed:*`
+  - Follow/unfollow/remove → clears `followers:*`, `following:*`, `feed:home:*`, `user_profile:*`
+  - Notification created → clears `notifications:*`, `notif:unread:*`
+- **Pattern-based invalidation** — `delete_cache_pattern("feed:*")` uses `SCAN` (non-blocking, unlike `KEYS`) to find and delete matching keys
 - **Token blacklisting** — on logout, the JWT is stored in Redis with its remaining TTL; every authenticated request checks the blacklist before processing
 - **Graceful degradation** — if Redis is unavailable, the API still works (cache misses fall through to the database); cache failures never cause 500 errors
 - **Startup health check** — Redis connectivity is verified on application startup with a clear success/failure message
@@ -254,9 +331,11 @@ A production-grade 1-on-1 chat system running over a single persistent WebSocket
 - **SQLAlchemy 2.0** — modern ORM with both async (`AsyncSession`) and sync engines
 - **Async database driver** — `asyncpg` for fully non-blocking database I/O
 - **Alembic migrations** — auto-run on container startup (`alembic upgrade head`); version-controlled schema changes
-- **Declarative models** — 14+ database tables:
+- **Declarative models** — 16+ database tables:
   - `users`, `posts`, `post_views`, `comments`, `votes`, `comment_votes`
   - `connections` (follow system)
+  - `notifications` (like, comment, follow events)
+  - `refresh_tokens` (opaque tokens with family-based rotation)
   - `messages`, `message_replies`, `message_reactions`, `deleted_messages`
   - `shared_posts`, `shared_post_replies`, `shared_post_reactions`, `deleted_shared_posts`
   - `otps` (OTP storage)
@@ -291,13 +370,13 @@ A production-grade 1-on-1 chat system running over a single persistent WebSocket
   - Optional fields with proper defaults
   - `model_config = ConfigDict(from_attributes=True)` for ORM compatibility
 - **Health check endpoint** — `GET /health` for monitoring and uptime checks
-- **Detailed API guide** — handwritten [`API_GUIDE.md`](./API_GUIDE.md) covering all 48+ REST endpoints and WebSocket message types with examples
+- **Detailed API guide** — handwritten [`API_GUIDE.md`](./API_GUIDE.md) covering all 55+ REST endpoints and WebSocket message types with examples
 
 ---
 
 ## 🧪 Testing
 
-- **Pytest** test suite with comprehensive coverage:
+- **Pytest** test suite with **50+ integration tests** covering:
   - Authentication & authorization
   - User management & profiles
   - Posts CRUD operations
@@ -327,4 +406,4 @@ A production-grade 1-on-1 chat system running over a single persistent WebSocket
 
 ---
 
-> Built with ❤️ using FastAPI, SQLAlchemy, PostgreSQL, Redis & WebSockets
+> Built with ❤️ using FastAPI, SQLAlchemy, PostgreSQL, Redis, WebSockets & Real-Time Pub/Sub

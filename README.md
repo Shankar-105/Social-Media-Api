@@ -1,7 +1,7 @@
 # 🚀 SocialMediaApi
 **Modern Social Media Backend + Real-time Chat – Scalable, Fast, and Beginner-Friendly**
 
-A **fully async, non-blocking** social media backend built to handle **thousands of concurrent connections** without breaking a sweat. Powered by FastAPI, asyncpg, Redis, and WebSockets — every route, every query, every cache hit runs on the event loop. CPU-heavy work (bcrypt, JWT) is offloaded to the thread pool so the server never stalls. Production-grade, real-time, and built for scale.
+A **fully async, non-blocking** social media backend built to handle **thousands of concurrent connections** without breaking a sweat. Powered by FastAPI, asyncpg, Redis, and WebSockets — every route, every query, every cache hit runs on the event loop. Features **refresh token rotation** with family-based revocation, **real-time notifications** via Redis Pub/Sub, **IP & user-based rate limiting**, **Redis caching across 11+ endpoints** with automatic invalidation. CPU-heavy work (bcrypt, JWT) is offloaded to the thread pool so the server never stalls. Production-grade, real-time, and built for scale.
 
 ---
 
@@ -29,7 +29,7 @@ clone the repositroy and set up the environment._
 
 ## 📖 How to Use the API — Complete Endpoint Reference
 
-_Now that your setup is running, explore every endpoint this API has to offer! Check out [`API_GUIDE.md`](./API_GUIDE.md) for a detailed walkthrough of all **48 REST endpoints** and the **real-time WebSocket chat system**._
+_Now that your setup is running, explore every endpoint this API has to offer! Check out [`API_GUIDE.md`](./API_GUIDE.md) for a detailed walkthrough of all **55 REST endpoints** and the **real-time WebSocket chat system**._
 
 > 💡 **Quick Start:** Visit `http://localhost:8000/docs` for the built-in Swagger UI — test endpoints right from your browser!
 

@@ -2,6 +2,14 @@
 
 > **Your one-stop reference for every REST and WebSocket endpoint in the SocialMediaApi.**
 
+### 📊 At a Glance
+
+| Type | Count |
+|------|-------|
+| **REST Endpoints** | **55** |
+| **WebSocket Endpoints** | **1** (`/chat/ws/{user_id}`) |
+| **WebSocket Message Types** | **11** (send) + **7** (receive) |
+
 ---
 
 ## ⚠️ Before You Begin
@@ -21,13 +29,17 @@ Before calling **any** endpoint, make sure you have:
 Most endpoints require a **JWT Bearer Token**. Here's the flow:
 
 1. **Sign up** → `POST /user/signup`
-2. **Log in** → `POST /login` → you receive an `accessToken`
-3. **Use the token** in subsequent requests:
+2. **Log in** → `POST /login` → you receive an `accessToken` + `refreshToken`
+3. **Use the access token** in subsequent requests:
    - **Header:** `Authorization: Bearer <your_access_token>`
    - **Postman:** Go to the *Authorization* tab → select *Bearer Token* → paste your token.
    - **cURL:** `curl -H "Authorization: Bearer <token>" http://localhost:8000/me/profile`
+4. **When the access token expires** → call `POST /refresh` with your `refreshToken` to get a fresh pair (old refresh token is revoked)
+5. **Log out** → `POST /logout` — blacklists the access token and revokes all refresh tokens for that user
 
 > 🔒 Endpoints marked with 🔐 require authentication. Public endpoints are marked with 🌐.
+> 
+> 🛡️ Several sensitive endpoints are **rate-limited** (marked with ⚡). Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header.
 
 ---
 
@@ -36,8 +48,9 @@ Most endpoints require a **JWT Bearer Token**. Here's the flow:
 | Section | Description |
 |---------|-------------|
 | [Health Check](#-health-check) | Verify the API is running |
-| [Authentication](#-authentication) | Sign up & log in |
+| [Authentication](#-authentication) | Sign up, log in, refresh tokens, logout |
 | [My Profile (me)](#-my-profile-me) | View/update your own profile, posts, stats |
+| [Notifications](#-notifications) | View, count, and mark notifications as read |
 | [Users](#-users) | View other users, their posts, followers |
 | [Posts](#-posts) | Create, read, update, delete posts |
 | [Comments](#-comments) | Comment on posts (CRUD) |
@@ -45,7 +58,8 @@ Most endpoints require a **JWT Bearer Token**. Here's the flow:
 | [Connections](#-connections-followunfollow) | Follow, unfollow, remove followers |
 | [Feed](#-feed) | Home feed & explore |
 | [Search](#-search) | Search users & hashtags |
-| [Password Management](#-password-management) | Change/reset password via OTP |
+| [Password Management](#-password-management) | Change/reset password via OTP (authenticated & unauthenticated) |
+| [Chat — Recent Chats](#-chat--recent-chats) | List recent conversations |
 | [Chat — Share Posts](#-chat--share-posts) | Share posts into DMs |
 | [Chat — Media Upload](#-chat--media-upload) | Upload images/videos/audio for chat |
 | [Chat — Message Info & Reactions](#-chat--message-info--reactions) | Message details, reactions |
@@ -121,8 +135,9 @@ curl http://localhost:8000/health
 |--------|-------|
 | **Endpoint** | `POST /login` |
 | **Auth** | 🌐 None |
+| **Rate Limit** | ⚡ 5 requests / 5 min per IP |
 | **Content-Type** | `application/x-www-form-urlencoded` |
-| **Description** | Authenticate and receive a JWT access token. |
+| **Description** | Authenticate and receive a JWT access token + refresh token. |
 
 **Request Body (form data):**
 | Field | Type | Required |
@@ -142,11 +157,73 @@ curl -X POST http://localhost:8000/login \
   "id": 1,
   "username": "john_doe",
   "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "a1b2c3d4e5f6...",
   "tokenType": "bearer"
 }
 ```
 
-> 📌 **Save the `accessToken`!** You'll need it as a Bearer token for all authenticated endpoints.
+> 📌 **Save both tokens!** Use `accessToken` as a Bearer token for all authenticated endpoints. Use `refreshToken` to silently get a new access token when the current one expires.
+
+---
+
+### 3. Refresh Token
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /refresh` |
+| **Auth** | 🌐 None |
+| **Rate Limit** | ⚡ 10 requests / 1 min per IP |
+| **Content-Type** | `application/json` |
+| **Description** | Exchange a valid refresh token for a new access + refresh token pair. The old refresh token is revoked (rotation). |
+
+**Request Body:**
+```json
+{
+  "refresh_token": "a1b2c3d4e5f6..."
+}
+```
+
+**cURL Example:**
+```bash
+curl -X POST http://localhost:8000/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "a1b2c3d4e5f6..."}'
+```
+
+**Response — `200 OK`:**
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "x7y8z9w0..."
+}
+```
+
+> ⚠️ **Security:** If a revoked refresh token is reused (replay attack), the entire token family is invalidated, forcing re-login on all devices.
+
+---
+
+### 4. Logout
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /logout` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Blacklists the current access token and revokes all refresh tokens for the user. |
+
+**cURL Example:**
+```bash
+curl -X POST http://localhost:8000/logout \
+  -H "Authorization: Bearer <token>"
+```
+
+**Response — `200 OK`:**
+```json
+{
+  "message": "Successfully logged out"
+}
+```
+
+> After logout, both the access token and all refresh tokens are invalidated. The user must log in again to get new tokens.
 
 ---
 
@@ -403,7 +480,82 @@ curl -X PATCH http://localhost:8000/me/updateInfo \
 
 ---
 
-## 👥 Users
+## � Notifications
+
+### 1. Get My Notifications
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /me/notifications` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Retrieve your notifications (likes, comments, follows), newest first. Cached for 20s. |
+
+**Query Parameters:**
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `limit` | int | `20` | 1–100 |
+| `offset` | int | `0` | Skip N notifications |
+
+**Response — `200 OK`:**
+```json
+{
+  "notifications": [
+    {
+      "id": 1,
+      "type": "like",
+      "text": "jane_doe liked your post",
+      "actor_username": "jane_doe",
+      "is_read": false,
+      "created_at": "2026-03-06T10:30:00Z",
+      "entity_type": "post",
+      "entity_id": 5
+    }
+  ],
+  "unread_count": 3,
+  "total": 10,
+  "limit": 20,
+  "offset": 0,
+  "has_more": false
+}
+```
+
+---
+
+### 2. Get Unread Notification Count
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /me/notifications/unread-count` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Returns the number of unread notifications — use this for the badge number in your UI. Cached for 20s. |
+
+**Response — `200 OK`:**
+```json
+{
+  "count": 3
+}
+```
+
+---
+
+### 3. Mark All Notifications as Read
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `PATCH /me/notifications/read` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | Marks all unread notifications as read for the current user. |
+
+**Response — `200 OK`:**
+```json
+{
+  "message": "All notifications marked as read"
+}
+```
+
+---
+
+## �👥 Users
 
 ### 1. Get All Users
 
@@ -1000,12 +1152,13 @@ curl -H "Authorization: Bearer <token>" \
 
 ## 🔒 Password Management
 
-### 1. Request OTP (Initiate Password Change)
+### 1. Request OTP (Initiate Password Change — Authenticated)
 
 | Detail | Value |
 |--------|-------|
 | **Endpoint** | `POST /change-password` |
 | **Auth** | 🔐 Bearer Token |
+| **Rate Limit** | ⚡ 3 requests / 1 hour per user |
 | **Description** | Sends a one-time password (OTP) to your registered email. Required before resetting your password. |
 
 **Response — `200 OK`:**
@@ -1019,14 +1172,15 @@ curl -H "Authorization: Bearer <token>" \
 
 ---
 
-### 2. Reset Password (with OTP)
+### 2. Reset Password (Authenticated, with OTP)
 
 | Detail | Value |
 |--------|-------|
 | **Endpoint** | `POST /reset-password` |
 | **Auth** | 🔐 Bearer Token |
+| **Rate Limit** | ⚡ 5 requests / 5 min per user |
 | **Content-Type** | `application/json` |
-| **Description** | Change your password after verifying the OTP sent to your email. |
+| **Description** | Change your password after verifying the OTP sent to your email. Revokes all refresh tokens after password change. |
 
 **Request Body:**
 ```json
@@ -1042,6 +1196,95 @@ curl -H "Authorization: Bearer <token>" \
 {
   "message": "Password changed successfully! Now login with new one."
 }
+```
+
+---
+
+### 3. Forgot Password (Unauthenticated)
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /forgot-password` |
+| **Auth** | 🌐 None |
+| **Rate Limit** | ⚡ 3 requests / 1 hour per IP |
+| **Content-Type** | `application/json` |
+| **Description** | Initiate a password reset without being logged in. Sends an OTP to the provided email. Response is always the same to prevent user enumeration. |
+
+**Request Body:**
+```json
+{
+  "email": "john@example.com"
+}
+```
+
+**cURL Example:**
+```bash
+curl -X POST http://localhost:8000/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"email": "john@example.com"}'
+```
+
+**Response — `200 OK`:**
+```json
+{
+  "message": "If an account with this email exists, an OTP has been sent."
+}
+```
+
+---
+
+### 4. Reset Password (Unauthenticated, with OTP)
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `POST /reset-password` (auth.py) |
+| **Auth** | 🌐 None |
+| **Rate Limit** | ⚡ 5 requests / 5 min per IP |
+| **Content-Type** | `application/json` |
+| **Description** | Complete the forgot-password flow by submitting the email, OTP, and new password. |
+
+**Request Body:**
+```json
+{
+  "email": "john@example.com",
+  "otp": "123456",
+  "new_password": "brandNewPass456"
+}
+```
+
+**Response — `200 OK`:**
+```json
+{
+  "message": "Password has been reset successfully. Please login with your new password."
+}
+```
+
+---
+
+## 💬 Chat — Recent Chats
+
+### 1. Get Recent Conversations
+
+| Detail | Value |
+|--------|-------|
+| **Endpoint** | `GET /recent-chats` |
+| **Auth** | 🔐 Bearer Token |
+| **Description** | List your recent chat conversations with a summary of the last message in each. |
+
+**Response — `200 OK`:**
+```json
+[
+  {
+    "id": 2,
+    "username": "jane_doe",
+    "nickname": "Jane",
+    "profile_pic": "jane_avatar.png",
+    "last_message": {
+      "content": "See you tomorrow!",
+      "timestamp": "2 hours ago"
+    }
+  }
+]
 ```
 
 ---
@@ -1509,64 +1752,74 @@ You will receive various event payloads from the server:
 
 ## 📊 Quick Reference — All Endpoints at a Glance
 
-### REST API Endpoints
+### REST API Endpoints (55 total)
 
 | # | Method | Endpoint | Auth | Description |
 |---|--------|----------|------|-------------|
 | 1 | `GET` | `/health` | 🌐 | Health check |
-| 2 | `POST` | `/user/signup` | 🌐 | Register new user |
-| 3 | `POST` | `/login` | 🌐 | Log in, get JWT |
-| 4 | `GET` | `/users/getAllUsers` | 🌐 | List all users |
-| 5 | `GET` | `/users/{id}/profile` | 🔐 | View user profile |
-| 6 | `GET` | `/users/{id}/profile/pic` | 🔐 | Get user's profile pic |
-| 7 | `GET` | `/users/{id}/posts` | 🔐 | Get user's posts |
-| 8 | `GET` | `/users/{id}/followers` | 🔐 | List user's followers |
-| 9 | `GET` | `/users/{id}/following` | 🔐 | List user's following |
-| 10 | `GET` | `/me/profile` | 🔐 | My profile |
-| 11 | `GET` | `/me/profile/pic` | 🔐 | My profile picture |
-| 12 | `DELETE` | `/me/profilepic/delete` | 🔐 | Remove my profile pic |
-| 13 | `PATCH` | `/me/updateInfo` | 🔐 | Update my info |
-| 14 | `GET` | `/me/posts` | 🔐 | My posts (paginated) |
-| 15 | `GET` | `/me/votedOnPosts` | 🔐 | Posts I voted on |
-| 16 | `GET` | `/me/voteStats` | 🔐 | My vote statistics |
-| 17 | `GET` | `/me/likedPosts` | 🔐 | Posts I liked |
-| 18 | `GET` | `/me/dislikedPosts` | 🔐 | Posts I disliked |
-| 19 | `GET` | `/me/commented-on` | 🔐 | Posts I commented on |
-| 20 | `GET` | `/me/comment-stats` | 🔐 | My comment statistics |
-| 21 | `POST` | `/posts/createPost` | 🔐 | Create post |
-| 22 | `GET` | `/posts/getPost/{id}` | 🔐 | Get post detail |
-| 23 | `PUT` | `/posts/editPost/{id}` | 🔐 | Edit post |
-| 24 | `DELETE` | `/posts/deletePost/{id}` | 🔐 | Delete post |
-| 25 | `POST` | `/comment` | 🔐 | Create comment |
-| 26 | `GET` | `/comments-on/{post_id}` | 🔐 | Get comments on post |
-| 27 | `PATCH` | `/comments/edit_comment/{id}` | 🔐 | Edit comment |
-| 28 | `DELETE` | `/comments/delete_comment/{id}` | 🔐 | Delete comment |
-| 29 | `POST` | `/vote/on_post` | 🔐 | Vote on post |
-| 30 | `POST` | `/vote/on_comment` | 🔐 | Vote on comment |
-| 31 | `POST` | `/follow/{user_id}` | 🔐 | Follow user |
-| 32 | `DELETE` | `/unfollow/{user_id}` | 🔐 | Unfollow user |
-| 33 | `DELETE` | `/remove_follower/{user_id}` | 🔐 | Remove follower |
-| 34 | `GET` | `/feed/home` | 🔐 | Home feed |
-| 35 | `GET` | `/feed/explore` | 🔐 | Explore feed |
-| 36 | `GET` | `/search` | 🔐 | Search users/hashtags |
-| 37 | `POST` | `/change-password` | 🔐 | Request password OTP |
-| 38 | `POST` | `/reset-password` | 🔐 | Reset password with OTP |
-| 39 | `POST` | `/share` | 🔐 | Share post to DM |
-| 40 | `POST` | `/upload-media` | 🔐 | Upload chat media |
-| 41 | `GET` | `/chat/history/{friend_id}` | 🔐 | Chat history |
-| 42 | `GET` | `/msgs/{msg_id}/info` | 🔐 | Message delivery info |
-| 43 | `GET` | `/msgs/{msg_id}/msg_reaction_info` | 🔐 | Message reactions |
-| 44 | `GET` | `/shared/{id}/reactions` | 🔐 | Shared post reactions |
-| 45 | `POST` | `/delete/for-me/{msg_id}` | 🔐 | Delete message for me |
-| 46 | `POST` | `/delete-share/for-me/{id}` | 🔐 | Delete share for me |
-| 47 | `DELETE` | `/clear-chat/{friend_id}` | 🔐 | Clear chat |
-| 48 | `GET` | `/msg/{msg_id}/can_edit` | 🔐 | Check edit eligibility |
+| 2 | `POST` | `/user/signup` | 🌐 ⚡ | Register new user |
+| 3 | `POST` | `/login` | 🌐 ⚡ | Log in, get JWT + refresh token |
+| 4 | `POST` | `/refresh` | 🌐 ⚡ | Rotate refresh token |
+| 5 | `POST` | `/logout` | 🔐 | Blacklist token + revoke refresh tokens |
+| 6 | `POST` | `/forgot-password` | 🌐 ⚡ | Initiate unauthenticated password reset |
+| 7 | `POST` | `/reset-password` (auth) | 🌐 ⚡ | Complete unauthenticated password reset |
+| 8 | `GET` | `/users/getAllUsers` | 🌐 | List all users |
+| 9 | `GET` | `/users/{id}/profile` | 🔐 | View user profile |
+| 10 | `GET` | `/users/{id}/profile/pic` | 🔐 | Get user's profile pic |
+| 11 | `GET` | `/users/{id}/posts` | 🔐 | Get user's posts |
+| 12 | `GET` | `/users/{id}/followers` | 🔐 | List user's followers |
+| 13 | `GET` | `/users/{id}/following` | 🔐 | List user's following |
+| 14 | `GET` | `/me/profile` | 🔐 | My profile |
+| 15 | `GET` | `/me/profile/pic` | 🔐 | My profile picture |
+| 16 | `DELETE` | `/me/profilepic/delete` | 🔐 | Remove my profile pic |
+| 17 | `PATCH` | `/me/updateInfo` | 🔐 | Update my info |
+| 18 | `GET` | `/me/posts` | 🔐 | My posts (paginated) |
+| 19 | `GET` | `/me/votedOnPosts` | 🔐 | Posts I voted on |
+| 20 | `GET` | `/me/voteStats` | 🔐 | My vote statistics |
+| 21 | `GET` | `/me/likedPosts` | 🔐 | Posts I liked |
+| 22 | `GET` | `/me/dislikedPosts` | 🔐 | Posts I disliked |
+| 23 | `GET` | `/me/commented-on` | 🔐 | Posts I commented on |
+| 24 | `GET` | `/me/comment-stats` | 🔐 | My comment statistics |
+| 25 | `GET` | `/me/notifications` | 🔐 | Paginated notifications |
+| 26 | `GET` | `/me/notifications/unread-count` | 🔐 | Unread notification count |
+| 27 | `PATCH` | `/me/notifications/read` | 🔐 | Mark all notifications read |
+| 28 | `POST` | `/posts/createPost` | 🔐 ⚡ | Create post |
+| 29 | `GET` | `/posts/getPost/{id}` | 🔐 | Get post detail |
+| 30 | `PUT` | `/posts/editPost/{id}` | 🔐 | Edit post |
+| 31 | `DELETE` | `/posts/deletePost/{id}` | 🔐 | Delete post |
+| 32 | `POST` | `/comment` | 🔐 ⚡ | Create comment |
+| 33 | `GET` | `/comments-on/{post_id}` | 🔐 | Get comments on post |
+| 34 | `PATCH` | `/comments/edit_comment/{id}` | 🔐 | Edit comment |
+| 35 | `DELETE` | `/comments/delete_comment/{id}` | 🔐 | Delete comment |
+| 36 | `POST` | `/vote/on_post` | 🔐 | Vote on post |
+| 37 | `POST` | `/vote/on_comment` | 🔐 | Vote on comment |
+| 38 | `POST` | `/follow/{user_id}` | 🔐 ⚡ | Follow user |
+| 39 | `DELETE` | `/unfollow/{user_id}` | 🔐 | Unfollow user |
+| 40 | `DELETE` | `/remove_follower/{user_id}` | 🔐 | Remove follower |
+| 41 | `GET` | `/feed/home` | 🔐 | Home feed |
+| 42 | `GET` | `/feed/explore` | 🔐 | Explore feed |
+| 43 | `GET` | `/search` | 🔐 | Search users/hashtags |
+| 44 | `POST` | `/change-password` | 🔐 ⚡ | Request password OTP |
+| 45 | `POST` | `/reset-password` (auth) | 🔐 ⚡ | Reset password with OTP |
+| 46 | `GET` | `/recent-chats` | 🔐 | Recent conversations |
+| 47 | `POST` | `/share` | 🔐 | Share post to DM |
+| 48 | `POST` | `/upload-media` | 🔐 | Upload chat media |
+| 49 | `GET` | `/chat/history/{friend_id}` | 🔐 | Chat history |
+| 50 | `GET` | `/msgs/{msg_id}/info` | 🔐 | Message delivery info |
+| 51 | `GET` | `/msgs/{msg_id}/msg_reaction_info` | 🔐 | Message reactions |
+| 52 | `GET` | `/shared/{id}/reactions` | 🔐 | Shared post reactions |
+| 53 | `POST` | `/delete/for-me/{msg_id}` | 🔐 | Delete message for me |
+| 54 | `POST` | `/delete-share/for-me/{id}` | 🔐 | Delete share for me |
+| 55 | `DELETE` | `/clear-chat/{friend_id}` | 🔐 | Clear chat |
+| 56 | `GET` | `/msg/{msg_id}/can_edit` | 🔐 | Check edit eligibility |
+
+> ⚡ = Rate-limited endpoint. See [FEATURES.md](./FEATURES.md) for default limits and `.env` configuration.
 
 ### WebSocket Endpoint
 
 | # | Protocol | Endpoint | Auth | Description |
 |---|----------|----------|------|-------------|
-| 1 | `WS` | `/chat/ws/{user_id}?token=<jwt>` | 🔐 | Real-time chat connection |
+| 1 | `WS` | `/chat/ws/{user_id}?token=<jwt>` | 🔐 | Real-time chat + notifications |
 
 ### WebSocket Message Types (Send)
 
@@ -1588,13 +1841,15 @@ You will receive various event payloads from the server:
 
 ## 💡 Tips & Troubleshooting
 
-- **Getting `401 Unauthorized`?** Your token may have expired. Log in again to get a fresh token.
+- **Getting `401 Unauthorized`?** Your access token may have expired. Use `POST /refresh` with your refresh token to get a new one silently — no re-login needed.
+- **Getting `429 Too Many Requests`?** You've hit a rate limit. Check the `Retry-After` header for when you can try again.
 - **Getting `404 Not Found` for media?** Ensure the Docker volumes are mounted and the folders (`profilepics/`, `posts_media/`, `chat-media/`) exist.
 - **WebSocket disconnecting?** Make sure to respond to `ping` messages with `pong` to avoid zombie detection.
 - **Swagger UI** at `http://localhost:8000/docs` is the fastest way to test REST endpoints — it handles auth and request formatting for you.
 - **For WebSocket testing**, use **Postman** (WebSocket tab), the **[websocat](https://github.com/nickel-org/websocat)** CLI tool, or the browser DevTools console.
 - **Rate limits on edit**: Message editing is time-limited (default 15 minutes). Always check `/msg/{msg_id}/can_edit` first.
+- **Refresh token reuse is dangerous**: If you reuse an old refresh token after rotation, the entire token family is revoked as a security measure.
 
 ---
 
-> Built with ❤️ using FastAPI, SQLAlchemy, PostgreSQL & WebSockets
+> Built with ❤️ using FastAPI, SQLAlchemy, PostgreSQL, Redis & WebSockets
