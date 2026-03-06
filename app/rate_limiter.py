@@ -9,7 +9,6 @@ async def _check(key: str, max_calls: int, window: int) -> None:
     if count == 1:
         # First hit in this window — start the expiry clock
         await _redis_svc.redis_client.expire(key, window)
-
     if count > max_calls:
         ttl = await _redis_svc.redis_client.ttl(key)
         retry_after = max(ttl, 1)   # guard against 0 if key just expired
@@ -41,14 +40,14 @@ def user_rate_limit(endpoint_id: str, max_calls: int, window: int):
 # Routes import these directly:  from app.rate_limiter import login_limiter
 
 # ip level rate limiters
-login_limiter          = ip_rate_limit("login",               settings.rl_login_max,               settings.rl_login_window)
-signup_limiter         = ip_rate_limit("signup",              settings.rl_signup_max,              settings.rl_signup_window)
-forgot_password_limiter = ip_rate_limit("forgot_password",    settings.rl_forgot_password_max,     settings.rl_forgot_password_window)
-reset_password_limiter = ip_rate_limit("reset_password",      settings.rl_reset_password_max,      settings.rl_reset_password_window)
+login_limiter = ip_rate_limit("login",settings.rl_login_max,settings.rl_login_window)
+signup_limiter = ip_rate_limit("signup",settings.rl_signup_max,settings.rl_signup_window)
+forgot_password_limiter = ip_rate_limit("forgot_password",settings.rl_forgot_password_max,settings.rl_forgot_password_window)
+reset_password_limiter = ip_rate_limit("reset_password",settings.rl_reset_password_max,settings.rl_reset_password_window)
 
 # user level rate limiters
-change_password_limiter    = user_rate_limit("change_password_otp",  settings.rl_change_password_max,    settings.rl_change_password_window)
-reset_password_auth_limiter = user_rate_limit("reset_password_auth", settings.rl_reset_password_auth_max, settings.rl_reset_password_auth_window)
-comment_limiter            = user_rate_limit("comment",              settings.rl_comment_max,            settings.rl_comment_window)
-create_post_limiter        = user_rate_limit("create_post",          settings.rl_create_post_max,        settings.rl_create_post_window)
-follow_limiter             = user_rate_limit("follow",               settings.rl_follow_max,             settings.rl_follow_window)
+change_password_limiter = user_rate_limit("change_password_otp",settings.rl_change_password_max,settings.rl_change_password_window)
+reset_password_auth_limiter = user_rate_limit("reset_password_auth",settings.rl_reset_password_auth_max,settings.rl_reset_password_auth_window)
+comment_limiter = user_rate_limit("comment",settings.rl_comment_max,settings.rl_comment_window)
+create_post_limiter = user_rate_limit("create_post",settings.rl_create_post_max,settings.rl_create_post_window)
+follow_limiter = user_rate_limit("follow",settings.rl_follow_max,settings.rl_follow_window)

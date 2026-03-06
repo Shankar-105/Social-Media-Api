@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str
     access_token_expire_time: int
+    refresh_token_expire_days: int = 7
     # email info
     email_username: str
     email_password: str

@@ -299,3 +299,25 @@ class Notification(Base):
     owner = relationship("User", foreign_keys=[owner_id], backref=backref("notifications", lazy="selectin"), lazy="selectin")
     # who triggered this notification (we need their username + profile pic for the client)
     actor = relationship("User", foreign_keys=[actor_id], lazy="selectin")
+
+
+class RefreshToken(Base):
+    """
+    Stores every refresh token ever issued.
+
+    token      — opaque random string (secrets.token_urlsafe), NOT a JWT
+    family_id  — UUID that groups all tokens born from a single login session.
+                 When reuse is detected, all tokens in the family are revoked.
+    revoked    — set to True when the token is rotated or explicitly revoked
+    """
+    __tablename__ = "refresh_tokens"
+
+    id         = Column(Integer, primary_key=True)
+    token      = Column(String, unique=True, index=True, nullable=False)
+    user_id    = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    family_id  = Column(String, nullable=False, index=True)
+    revoked    = Column(Boolean, default=False, server_default="false", nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", lazy="selectin")
