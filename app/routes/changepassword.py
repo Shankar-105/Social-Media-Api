@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException,Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app import email_service,models,otp_service,schemas,db,oauth2
+from app import email_service,models,otp_service,schemas,db,oauth2,token_service
 from app.my_utils import utils
 from app.rate_limiter import change_password_limiter, reset_password_auth_limiter
 
@@ -38,4 +38,6 @@ async def reset_password(request:schemas.PasswordResetRequest=Body(...),db:Async
     currentUser.password = await utils.hashPassword(request.new_password)
     # Save to DB
     await db.commit()
+    # Revoke all refresh tokens — forces re-login on every device
+    await token_service.revoke_all_user_tokens(db, currentUser.id)
     return schemas.SuccessResponse(message="Password changed successfully! Now login with new one.")

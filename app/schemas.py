@@ -93,7 +93,12 @@ class TokenModel(BaseModel):
     id: int
     username: str
     accessToken: str
+    refreshToken: str
     tokenType: str
+
+class RefreshTokenRequest(BaseModel):
+    """Request body for POST /refresh"""
+    refresh_token: str
 
 class ForgotPasswordSchema(BaseModel):
     """Request schema for forgot password"""

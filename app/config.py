@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     rl_forgot_password_window: int = 3600
     rl_reset_password_max: int = 5
     rl_reset_password_window: int = 300
+    rl_refresh_max: int = 10
+    rl_refresh_window: int = 60
     rl_change_password_max: int = 3
     rl_change_password_window: int = 3600
     rl_reset_password_auth_max: int = 5

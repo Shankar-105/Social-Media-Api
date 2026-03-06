@@ -44,6 +44,7 @@ login_limiter = ip_rate_limit("login",settings.rl_login_max,settings.rl_login_wi
 signup_limiter = ip_rate_limit("signup",settings.rl_signup_max,settings.rl_signup_window)
 forgot_password_limiter = ip_rate_limit("forgot_password",settings.rl_forgot_password_max,settings.rl_forgot_password_window)
 reset_password_limiter = ip_rate_limit("reset_password",settings.rl_reset_password_max,settings.rl_reset_password_window)
+refresh_limiter = ip_rate_limit("refresh",settings.rl_refresh_max,settings.rl_refresh_window)
 
 # user level rate limiters
 change_password_limiter = user_rate_limit("change_password_otp",settings.rl_change_password_max,settings.rl_change_password_window)

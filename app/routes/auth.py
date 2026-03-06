@@ -1,5 +1,5 @@
 from fastapi import status,HTTPException,Depends,Body,APIRouter
-from app import db,models,oauth2
+from app import db,models,oauth2,token_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import app.my_utils.utils as utils
@@ -10,7 +10,7 @@ from datetime import datetime
 import app.redis_service as redis_service
 import app.otp_service as otp_service
 import app.email_service as email_service
-from app.rate_limiter import login_limiter, forgot_password_limiter, reset_password_limiter
+from app.rate_limiter import login_limiter, forgot_password_limiter, reset_password_limiter, refresh_limiter
 
 router=APIRouter(tags=['Authentication'])
 
@@ -32,15 +32,27 @@ async def loginUser(userCred:OAuth2PasswordRequestForm=Depends(),db:AsyncSession
   # the createAccessToken from oauth2 file which generates an jwt token
   tokenData={"userId":isUserPresent.id,"userName":isUserPresent.username}
   access_token=await oauth2.createAccessToken(tokenData)
-  # return the access token 
+  # create a refresh token for this login session (new family)
+  refresh_token=await token_service.create_refresh_token(db, isUserPresent.id)
+  # return both tokens
   return sch.TokenModel(id=isUserPresent.id,
                         username=isUserPresent.username,
                         accessToken=access_token,
+                        refreshToken=refresh_token,
                         tokenType="bearer" 
                         )
 
+@router.post("/refresh", status_code=status.HTTP_200_OK)
+async def refresh(payload: sch.RefreshTokenRequest = Body(...), db: AsyncSession = Depends(db.getDb), _: None = Depends(refresh_limiter)):
+    """
+    Exchange a valid refresh token for a new access + refresh token pair.
+    The old refresh token is revoked (rotation).
+    """
+    access_token, new_refresh = await token_service.rotate_refresh_token(db, payload.refresh_token)
+    return {"accessToken": access_token, "refreshToken": new_refresh}
+
 @router.post("/logout", status_code=status.HTTP_200_OK)
-async def logout(token: str = Depends(oauth2.oauth2_scheme)):
+async def logout(token: str = Depends(oauth2.oauth2_scheme), db: AsyncSession = Depends(db.getDb)):
     try:
         # Decode the token to get the expiration time
         # offloaded to thread pool via oauth2.decodeToken()
@@ -52,6 +64,11 @@ async def logout(token: str = Depends(oauth2.oauth2_scheme)):
             if remaining_time > 0:
                 # Add token to blacklist with remaining time as TTL
                 await redis_service.add_to_blacklist(token, int(remaining_time))
+        # Also revoke all refresh tokens for this user so no
+        # device can silently get new access tokens after logout.
+        user_id = payload.get("userId")
+        if user_id:
+            await token_service.revoke_all_user_tokens(db, user_id)
         return {"message": "Successfully logged out"}
     except JWTError:
         raise HTTPException(
