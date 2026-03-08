@@ -52,6 +52,7 @@ async def getPost(postId:int,db:AsyncSession=Depends(getDb),currentUser:models.U
         media_url = get_blob_url("posts-media", reqPost.media_path)
     
     owner = sch.UserBasicResponse(
+        id=reqPost.user.id,
         username=reqPost.user.username,
         nickname=reqPost.user.nickname,
         profile_pic=reqPost.user.profile_picture

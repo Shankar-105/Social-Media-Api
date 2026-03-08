@@ -1,0 +1,59 @@
+name: Deploy to Azure VM
+
+on:
+  workflow_run:
+    workflows: ["FastAPI Social Media CI"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            # Ensure correct ownership
+            sudo chown -R $USER:$USER /app
+            cd /app
+
+            echo "📦 Pulling latest code..."
+            if [ ! -d ".git" ]; then
+              git init
+              git remote add origin https://github.com/Shankar-105/Social-Media-Api.git
+            fi
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "📥 Installing dependencies..."
+            source venv/bin/activate
+            pip install -r requirements.txt --quiet
+
+            echo "🗃️ Running database migrations..."
+            set -a && source .env && set +a
+            alembic upgrade head
+
+            echo "🔄 Restarting application..."
+            sudo systemctl restart fastapi
+
+            sleep 3
+            if sudo systemctl is-active --quiet fastapi; then
+              echo "✅ Deployment successful! App is running."
+            else
+              echo "❌ Deployment failed!"
+              sudo journalctl -u fastapi --no-pager -n 20
+              exit 1
+            fi
