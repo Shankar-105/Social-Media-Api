@@ -3,6 +3,7 @@ from app import models,db,schemas as sch,oauth2,config
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,func
 from typing import Annotated
+from app.blob_service import get_blob_url
 router=APIRouter(tags=['search'])
 
 @router.get("/search", status_code=status.HTTP_202_ACCEPTED, response_model=sch.SearchResultResponse)
@@ -30,7 +31,7 @@ async def search(searchParams: sch.SearchRequest = Depends(), db: AsyncSession =
             posts.append(sch.PostListItemResponse(
                 id=post.id,
                 title=post.title,
-                media_url=f"{config.settings.base_url}/{config.settings.media_folder}/{post.media_path}" if post.media_path else None,
+                media_url=get_blob_url("posts-media", post.media_path) if post.media_path else None,
                 media_type=post.media_type,
                 likes=post.likes,
                 comments_count=post.comments_cnt,

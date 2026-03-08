@@ -7,10 +7,10 @@ from app.db import getDb
 from app.redis_service import get_cache, set_cache, delete_cache, delete_cache_pattern
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,and_
-import os,uuid,shutil
-import aiofiles
+import os,uuid
 import asyncio
 from app.config import settings
+from app.blob_service import upload_blob, delete_blob, get_blob_url
 router=APIRouter(
     tags=['Posts']
 )
@@ -49,10 +49,9 @@ async def getPost(postId:int,db:AsyncSession=Depends(getDb),currentUser:models.U
     # Build proper response with schema
     media_url = None
     if reqPost.media_path:
-        media_url = f"{settings.base_url}/{settings.media_folder}/{reqPost.media_path}"
+        media_url = get_blob_url("posts-media", reqPost.media_path)
     
     owner = sch.UserBasicResponse(
-        id=reqPost.user.id,
         username=reqPost.user.username,
         nickname=reqPost.user.nickname,
         profile_pic=reqPost.user.profile_picture
@@ -99,12 +98,8 @@ async def create_post(
         # using uuid Universally unique ID which generates a 36 characters
         ext=media.filename.split(".")[-1]
         filename=f"{uuid.uuid4()}.{ext}"
-        file_path=os.path.join(settings.media_folder,filename)
-        # transfer the data from args to the file using aiofiles (non-blocking)
         content_bytes = await media.read()
-        async with aiofiles.open(file_path, "wb") as buffer:
-            await buffer.write(content_bytes)
-        # we will only store the filename in the db
+        await upload_blob("posts-media", filename, content_bytes, media.content_type)
         media_path=filename
         media_type="image" if media.content_type.startswith("image") else "video"
     new_post = models.Post(
@@ -124,7 +119,7 @@ async def create_post(
     # Build proper response
     media_url = None
     if new_post.media_path:
-        media_url = f"{settings.base_url}/{settings.media_folder}/{new_post.media_path}"
+        media_url = get_blob_url("posts-media", new_post.media_path)
     
     owner = sch.UserBasicResponse(
         id=currentUser.id,
@@ -157,9 +152,7 @@ async def deletePost(postId:int,db:AsyncSession=Depends(getDb),currentUser:model
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with Id {postId} not Found")
     # Fix bug: construct path before checking existence
     if postToDelete.media_path:
-        media_path = f"{settings.media_folder}/{postToDelete.media_path}"
-        if os.path.exists(media_path):
-            await asyncio.to_thread(os.remove, media_path)
+        await delete_blob("posts-media", postToDelete.media_path)
     await db.delete(postToDelete)
     await db.commit()
     # Invalidate caches for this post, feeds, and user posts
@@ -196,7 +189,7 @@ async def editPost(postId:int,post:sch.PostUpdateRequest,db:AsyncSession=Depends
     # Build proper response
     media_url = None
     if postToUpdate.media_path:
-        media_url = f"{settings.base_url}/{settings.media_folder}/{postToUpdate.media_path}"
+        media_url = get_blob_url("posts-media", postToUpdate.media_path)
     
     owner = sch.UserBasicResponse(
         id=postToUpdate.user.id,

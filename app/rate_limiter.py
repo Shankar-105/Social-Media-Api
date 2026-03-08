@@ -5,18 +5,24 @@ from app.config import settings
 
 
 async def _check(key: str, max_calls: int, window: int) -> None:
-    count = await _redis_svc.redis_client.incr(key)
-    if count == 1:
-        # First hit in this window — start the expiry clock
-        await _redis_svc.redis_client.expire(key, window)
-    if count > max_calls:
-        ttl = await _redis_svc.redis_client.ttl(key)
-        retry_after = max(ttl, 1)   # guard against 0 if key just expired
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Rate limit exceeded. Try again in {retry_after}s.",
-            headers={"Retry-After": str(retry_after)},
-        )
+    try:
+        count = await _redis_svc.redis_client.incr(key)
+        if count == 1:
+            # First hit in this window — start the expiry clock
+            await _redis_svc.redis_client.expire(key, window)
+        if count > max_calls:
+            ttl = await _redis_svc.redis_client.ttl(key)
+            retry_after = max(ttl, 1)   # guard against 0 if key just expired
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate limit exceeded. Try again in {retry_after}s.",
+                headers={"Retry-After": str(retry_after)},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        # Redis unavailable — let the request through without rate limiting
+        pass
 
 
 def ip_rate_limit(endpoint_id: str, max_calls: int, window: int):

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    redis_password: str = ""
+    # azure blob storage
+    azure_storage_connection_string: str = ""
+    azure_storage_account_name: str = ""
     # rate limiting — max hits and window (seconds) per endpoint
     rl_login_max: int = 5
     rl_login_window: int = 300

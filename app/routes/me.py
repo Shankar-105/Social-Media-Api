@@ -5,11 +5,11 @@ from typing import List
 from app import models,db,oauth2
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,and_,distinct,func,case,update
-import os,shutil
-import aiofiles
+import os
 import asyncio
 from fastapi import UploadFile,File
 from app.redis_service import delete_cache
+from app.blob_service import upload_blob, delete_blob, get_blob_url
 
 router=APIRouter(
     tags=['me']
@@ -39,13 +39,8 @@ async def myProfilePicture(db:AsyncSession=Depends(db.getDb),currentUser:models.
     # if he doesnt have a porfile pic return 404
     if not profilePicturePath:
         raise HTTPException(status_code=404, detail="No profile picture")
-    file_path=f"profilepics/{profilePicturePath}"
-    # optional check
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Image not found")
-    # return proper schema with full URL
     return sch.MediaInfo(
-        url=f"{os.getenv('BASE_URL', 'http://localhost:8000')}/profilepics/{profilePicturePath}",
+        url=get_blob_url("profilepics", profilePicturePath),
         type="image"
     )
 @router.delete("/me/profilepic/delete",status_code=status.HTTP_200_OK, response_model=sch.SuccessResponse)
@@ -53,9 +48,7 @@ async def removeProfilePicture(db:AsyncSession=Depends(db.getDb),currentUser:mod
     profilePic=currentUser.profile_picture
     if not profilePic:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="No profile picture to remove")
-    file_path=f"profilepics/{profilePic}"
-    if os.path.exists(file_path):
-        await asyncio.to_thread(os.remove, file_path)
+    await delete_blob("profilepics", profilePic)
     currentUser.profile_picture=None
     await db.commit()
     # profile changed — bust the cached profile for this user
@@ -86,7 +79,7 @@ async def getAllPosts(limit:int=Query(10, ge=1, le=100),
     for post in paginatedPosts:
         media_url = None
         if post.media_path:
-            media_url = f"{os.getenv('BASE_URL', 'http://localhost:8000')}/{os.getenv('MEDIA_FOLDER', 'posts_media')}/{post.media_path}"
+            media_url = get_blob_url("posts-media", post.media_path)
         posts.append(sch.PostListItemResponse(
             id=post.id,
             title=post.title,
@@ -126,26 +119,13 @@ async def updateUserInfo(username:str=Form(None),bio:str=Form(None),profile_pict
     if bio:
         updates['bio']=bio
     if profile_picture:
-        # creating an profilepics directory to store the
-        # users profile pics locally instead of inserting them
-        # into the db which is a bad practice
-        os.makedirs("profilepics", exist_ok=True)
-        # allowing only certain file types
-        # File.content_type method returns image/extension if its not
-        # present in our list we raise an error
         allowedFileTypes=['image/jpeg','image/png','image/gif']
         if profile_picture.content_type not in allowedFileTypes:
             raise HTTPException(status_code=400,detail="only jpeg,png,gif files allowed")
-        # file path to store in db we just store the filename in the db 
-        # not the entire image or the entire path just the filename
-        filename_toput_inDb=f"{currentUser.username}_{profile_picture.filename}"
-        # this is the actual file path where the profile pics reside
-        file_path=f"profilepics/{currentUser.username}_{profile_picture.filename}"
-        # async file write using aiofiles (non-blocking)
+        blob_name=f"{currentUser.username}_{profile_picture.filename}"
         content_bytes = await profile_picture.read()
-        async with aiofiles.open(file_path,"wb") as buffer:
-            await buffer.write(content_bytes)
-        updates['profile_picture']=filename_toput_inDb
+        await upload_blob("profilepics", blob_name, content_bytes, profile_picture.content_type)
+        updates['profile_picture']=blob_name
         # if any updates update them
     if updates:
         await db.execute(update(models.User).where(models.User.id==currentUser.id).values(**updates))

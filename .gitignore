@@ -68,3 +68,15 @@ EXTRA_FEATURES.md
 
 # avoide the redis backup file
 *.rdb
+
+# ignore deployment artifacts
+deploy.zip
+*.sh
+vm.env
+create_db.py
+
+# ignore VS Code folder
+.vscode/
+
+# ignore azure integration plan (has credentials)
+azure_integration_plan.md

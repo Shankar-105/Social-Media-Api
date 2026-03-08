@@ -9,6 +9,7 @@ import app.my_utils.utils as utils
 import os
 from app.redis_service import get_cache, set_cache, delete_cache, delete_cache_pattern
 from app.rate_limiter import signup_limiter
+from app.blob_service import get_blob_url
 router=APIRouter(
     tags=['Users']
 )
@@ -62,13 +63,8 @@ async def myProfilePicture(user_id:int,db:AsyncSession=Depends(db.getDb),current
     # if he doesnt have a porfile pic return 404
     if not profilePicturePath:
         raise HTTPException(status_code=404, detail="No profile picture")
-    file_path=f"profilepics/{profilePicturePath}"
-    # optional check
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Image not found")
-    # return proper schema with full URL
     return sch.MediaInfo(
-        url=f"{os.getenv('BASE_URL', 'http://localhost:8000')}/profilepics/{profilePicturePath}",
+        url=get_blob_url("profilepics", profilePicturePath),
         type="image"
     )
 
@@ -185,7 +181,7 @@ async def getAllPosts(user_id:int,limit:int=Query(10, ge=1, le=100),
     for post in paginatedPosts:
         media_url = None
         if post.media_path:
-            media_url = f"{os.getenv('BASE_URL', 'http://localhost:8000')}/{os.getenv('MEDIA_FOLDER', 'posts_media')}/{post.media_path}"
+            media_url = get_blob_url("posts-media", post.media_path)
         posts.append(sch.PostListItemResponse(
             id=post.id,
             title=post.title,

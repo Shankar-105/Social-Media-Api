@@ -4,6 +4,7 @@ from sqlalchemy import select,func,desc
 from typing import List
 from app import models, schemas, oauth2 , db
 from app.redis_service import get_cache, set_cache, delete_cache
+from app.blob_service import get_blob_url
 import os
 
 router = APIRouter(tags=["Feed"])
@@ -57,7 +58,7 @@ async def getHomeFeed(limit:int=Query(10, ge=1, le=100),
         post_item = schemas.PostListItemResponse(
             id=post.id,
             title=post.title,
-            media_url=f"{os.getenv('BASE_URL', 'http://localhost:8000')}/{os.getenv('MEDIA_FOLDER', 'posts_media')}/{post.media_path}" if post.media_path else None,
+            media_url=get_blob_url("posts-media", post.media_path) if post.media_path else None,
             media_type=post.media_type,
             likes=post.likes,
             comments_count=post.comments_cnt,
@@ -109,7 +110,7 @@ async def getExploreFeed(limit:int=Query(20, ge=1, le=100),
     for post in posts:
         media_url = None
         if post.media_path:
-            media_url = f"{os.getenv('BASE_URL', 'http://localhost:8000')}/{os.getenv('MEDIA_FOLDER', 'posts_media')}/{post.media_path}"
+            media_url = get_blob_url("posts-media", post.media_path)
             
         explore_posts.append(schemas.PostListItemResponse(
             id=post.id,

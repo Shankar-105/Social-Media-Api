@@ -1,12 +1,7 @@
-# routes/dm.py or routes/chat.py
 from fastapi import File, UploadFile, APIRouter, Depends
-import aiofiles
-import os
-from datetime import datetime
 from uuid import uuid4
-from app import models,oauth2,schemas
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.my_utils.socket_manager import manager
+from app import oauth2
+from app.blob_service import upload_blob
 router = APIRouter()
 
 @router.post("/upload-media")
@@ -14,20 +9,10 @@ async def upload_media(
     file:UploadFile = File(...),
     current_user = Depends(oauth2.getCurrentUser)
 ):
-    # get the file type using the content_type attribute of the fastapi UploadFile class
-    media_type = file.content_type.split("/")[0]  # 'video', 'audio', 'image'
-    folder = f"chat-media/{media_type}s"  # media/videos, media/audios
-    # create the dir if dosnt exist
-    os.makedirs(folder,exist_ok=True)
-
-    # Secure filename using uuid4
+    # 'video', 'audio', 'image'
+    media_type = file.content_type.split("/")[0]
     file_extension = file.filename.split(".")[-1]
-    filename = f"{uuid4()}.{file_extension}"
-    file_path = f"{folder}/{filename}"
-
+    blob_name = f"{media_type}s/{uuid4()}.{file_extension}"
     content_bytes = await file.read()
-    async with aiofiles.open(file_path, "wb") as buffer:
-        await buffer.write(content_bytes)
-    # Return media URL to frontend
-    media_url = f"/{media_type}s/{filename}"
-    return {"media_url":media_url,"type":media_type}
+    media_url = await upload_blob("chat-media", blob_name, content_bytes, file.content_type)
+    return {"media_url": media_url, "type": media_type}

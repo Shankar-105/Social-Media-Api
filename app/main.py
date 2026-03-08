@@ -67,8 +67,11 @@ async def _notification_listener() -> None:
 async def lifespan(app: FastAPI):
     # ── startup ──
     global _listener_task
-    await check_redis_connection()
-    _listener_task = asyncio.create_task(_notification_listener())
+    redis_ok = await check_redis_connection()
+    if redis_ok:
+        _listener_task = asyncio.create_task(_notification_listener())
+    else:
+        print("⚠️  Skipping Redis notification listener (Redis unavailable)")
 
     yield   # app is running between these two points
 

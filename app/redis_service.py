@@ -135,17 +135,18 @@ async def delete_cache_pattern(pattern: str) -> None:
 
 #  3. STARTUP CHECK 
 
-async def check_redis_connection() -> None:
+async def check_redis_connection() -> bool:
     """
     Call this once at app startup to confirm Redis is reachable.
-    Prints a clear message to your terminal.
+    Returns True if connected, False otherwise.
     """
     if await ping_redis():
         print("✅ Redis connection successful!")
+        return True
     else:
-        print("❌ Redis connection FAILED — caching will not work.")
+        print("❌ Redis connection FAILED — caching and rate-limiting will be disabled.")
         print(f"   Tried connecting to {settings.redis_host}:{settings.redis_port}")
-        print("   Make sure your Redis server is running (e.g. in WSL: sudo service redis-server start)")
+        return False
 
 async def add_to_blacklist(token: str, ttl: int):
     """
