@@ -63,6 +63,7 @@ FastAPI_to_Express_Guide.md
 ASYNC_MIGRATION.md
 DATABASE_CONNECTIONS.md
 EXTRA_FEATURES.md
+ssh_guide.md
 # avoid ui-ux-promax agent
 .agent
 
