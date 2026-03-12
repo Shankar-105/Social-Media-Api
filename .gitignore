@@ -63,7 +63,8 @@ FastAPI_to_Express_Guide.md
 ASYNC_MIGRATION.md
 DATABASE_CONNECTIONS.md
 EXTRA_FEATURES.md
-ssh_guide.md
+SSH_GUIDE.md
+AZURE_INTEGRATION.md
 # avoid ui-ux-promax agent
 .agent
 
@@ -78,6 +79,3 @@ create_db.py
 
 # ignore VS Code folder
 .vscode/
-
-# ignore azure integration plan (has credentials)
-azure_integration_plan.md

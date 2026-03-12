@@ -20,21 +20,6 @@ models.Base.metadata.create_all(bind=sync_engine)
 _listener_task: asyncio.Task | None = None
 
 async def _notification_listener() -> None:
-    """
-    Long-running coroutine — runs as an asyncio.Task (see startup_event).
-
-    Subscribes to Redis pattern 'notifications:*'.
-    Channel format : "notifications:<user_id>"
-    Message payload: JSON string built by notification_service.create_notification()
-
-    On every pmessage:
-      1. Parse user_id from the channel name.
-      2. Decode the JSON payload.
-      3. Call manager.send_personal_message() — a no-op if the user is offline.
-
-    Errors per message are silently swallowed so one bad message never kills
-    the listener loop. CancelledError (sent by shutdown_event) exits cleanly.
-    """
     ps = _redis_svc.redis_client.pubsub()
     await ps.psubscribe("notifications:*")
     try:
@@ -103,7 +88,12 @@ app.mount("/chat-media",StaticFiles(directory="chat-media"),name="chat-media")
 # so we need to do specify to allow all origins for now in dev scenario
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "https://fastapi-social-vm.centralindia.cloudapp.azure.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -16,12 +16,21 @@ router=APIRouter(
 
 @router.get("/users/{user_id}/profile",status_code=status.HTTP_200_OK,response_model=sch.UserProfileResponse)
 async def userProfile(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:models.User=Depends(oauth2.getCurrentUser)):
+    # Explicitly check if following
+    is_following_query = await db.execute(
+        select(models.connections).where(
+            models.connections.c.follower_id == currentUser.id,
+            models.connections.c.followed_id == user_id
+        )
+    )
+    is_following = is_following_query.first() is not None
+
     # Check Redis cache first 
     cache_key = f"user_profile:{user_id}"
     cached = await get_cache(cache_key)
     if cached:
         # Cache HIT → return the cached dict directly (FastAPI serializes it)
-        cached["is_following"] = user_id in [u.id for u in currentUser.following]
+        cached["is_following"] = is_following
         return cached
 
     # Cache MISS → query the database
@@ -29,9 +38,6 @@ async def userProfile(user_id:int,db:AsyncSession=Depends(db.getDb),currentUser:
     user=result.scalars().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="User not found")
-    
-    # Check if current user follows this user
-    is_following = user in currentUser.following
     
     # Count posts via query instead of len(user.posts) for efficiency
     posts_count_result = await db.execute(select(func.count()).select_from(models.Post).where(models.Post.user_id==user_id))
@@ -175,7 +181,17 @@ async def getAllPosts(user_id:int,limit:int=Query(10, ge=1, le=100),
     # and order them by the latest as first
     postsResult=await db.execute(select(models.Post).where(models.Post.user_id==user_id).order_by(models.Post.created_at.desc()).offset(offset).limit(limit))
     paginatedPosts=postsResult.scalars().all()
-    
+
+    # Determine which posts the current user has liked
+    liked_ids: set[int] = set()
+    if paginatedPosts:
+        post_ids = [p.id for p in paginatedPosts]
+        liked_result = await db.execute(
+            select(models.Votes.post_id)
+            .where(models.Votes.user_id == currentUser.id, models.Votes.post_id.in_(post_ids), models.Votes.action == True)
+        )
+        liked_ids = {row[0] for row in liked_result.all()}
+
     # Build proper response
     posts = []
     for post in paginatedPosts:
@@ -189,6 +205,7 @@ async def getAllPosts(user_id:int,limit:int=Query(10, ge=1, le=100),
             media_type=post.media_type,
             likes=post.likes,
             comments_count=post.comments_cnt,
+            is_liked=post.id in liked_ids,
             created_at=post.created_at
         ))
     

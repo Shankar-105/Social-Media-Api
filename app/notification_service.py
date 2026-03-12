@@ -31,24 +31,6 @@ async def create_notification(
     entity_id: int | None = None,
     entity_type: str | None = None,
 ) -> None:
-    """
-    Persist a notification to the DB and publish it to the Redis Pub/Sub channel
-    for the target user so the live WebSocket subscriber (step 5) can push it
-    to the user if they are currently connected.
-
-    This function is designed to be called as a FastAPI BackgroundTask — it
-    creates its own DB session because by the time a background task runs the
-    original request's session is already closed and returned to the pool.
-
-    Parameters
-    ----------
-    actor_id      : user who triggered the event (the liker / commenter / follower)
-    owner_id      : user who will receive the notification
-    notif_type    : NotificationType enum value
-    actor_username: display name used to build the notification text
-    entity_id     : post_id or comment_id that the event is about (None for follows)
-    entity_type   : "post" | "comment" | None — tells the client what to navigate to
-    """
     # Belt-and-suspenders self-notification guard.
     # The caller already checks this, but if this function is ever called from
     # anywhere else we never want a user to get their own notification.
@@ -98,7 +80,7 @@ async def create_notification(
             "created_at":   notif.created_at.isoformat() if notif.created_at else None,
         })
         try:
-            await redis_client.publish(f"notifications:{owner_id}", payload)
+            await redis_client.publish(f"notifications:{owner_id}",payload)
         except Exception:
             # Redis is down → notification is already safely in the DB.
             # The user will receive it via the missed-notifications delivery on
