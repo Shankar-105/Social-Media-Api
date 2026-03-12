@@ -67,7 +67,7 @@ class UserProfileResponse(BaseModel):
     """General Complete user profile data"""
     id: int
     username: str
-    nickname: str
+    nickname: Optional[str] = None
     bio: Optional[str] = None
     profile_picture: Optional[str] = None
     posts_count: int
@@ -460,7 +460,7 @@ class ActorBasic(BaseModel):
     """Minimal actor info embedded in a notification (who triggered it)."""
     id: int
     username: str
-    profile_pic: Optional[str] = None
+    profile_pic: Optional[str] = Field(None, validation_alias="profile_picture")
     model_config = ConfigDict(from_attributes=True)
 
 class NotificationResponse(BaseModel):
@@ -470,7 +470,7 @@ class NotificationResponse(BaseModel):
     when the user taps the notification.
     """
     id: int
-    notif_type: str          = Field(alias="type")   # "like" | "comment" | "follow"
+    type: str                                         # "like" | "comment" | "follow"
     actor: ActorBasic
     text: str                                         # "shankar liked your post"
     entity_id: Optional[int]   = None                 # post_id or comment_id

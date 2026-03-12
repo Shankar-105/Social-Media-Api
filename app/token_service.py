@@ -1,13 +1,3 @@
-"""
-app/token_service.py
-====================
-All refresh-token logic lives here: create, rotate, revoke.
-
-Refresh tokens are opaque random strings (NOT JWTs) stored in the
-refresh_tokens DB table.  Each login session gets a family_id (UUID)
-so we can revoke an entire chain of rotated tokens if reuse is detected.
-"""
-
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -23,21 +13,7 @@ from app.config import settings
 async def create_refresh_token(
     db: AsyncSession, user_id: int, family_id: str | None = None
 ) -> str:
-    """
-    Generate and persist a new refresh token.
 
-    Parameters
-    ----------
-    db        : active async DB session
-    user_id   : the user this token belongs to
-    family_id : UUID grouping tokens from one login session.
-                None on first login → a new UUID is generated.
-                Passed explicitly during rotation to keep the chain.
-
-    Returns
-    -------
-    The raw token string that the client must store.
-    """
     token_str = secrets.token_urlsafe(32)  # 43-char cryptographically random
     if family_id is None:
         family_id = str(uuid.uuid4())
@@ -57,20 +33,7 @@ async def create_refresh_token(
 async def rotate_refresh_token(
     db: AsyncSession, old_token_str: str
 ) -> tuple[str, str]:
-    """
-    Validate the old refresh token, revoke it, and issue a fresh pair
-    (new access token + new refresh token in the same family).
-
-    Returns
-    -------
-    (access_token, new_refresh_token)
-
-    Raises
-    ------
-    HTTP 401 if the token is missing, expired, or revoked.
-    If the token was ALREADY revoked (reuse detected), the entire
-    family is revoked as a security precaution.
-    """
+    
     from fastapi import HTTPException, status  # local import to avoid circular
 
     result = await db.execute(

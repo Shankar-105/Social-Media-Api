@@ -24,7 +24,7 @@ async def getPost(postId:int,db:AsyncSession=Depends(getDb),currentUser:models.U
     if cached:
         return cached
 
-    result=await db.execute(select(models.Post).where(and_(models.Post.id==postId,models.Post.user_id==currentUser.id)))
+    result=await db.execute(select(models.Post).where(models.Post.id==postId))
     reqPost=result.scalars().first()
     if reqPost==None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f"post with id {postId} not found")

@@ -70,6 +70,9 @@ async def verifyAccesstoken(token:str,credentials_exception,dbs:AsyncSession):
         # if not then we query the db using the async select() pattern
         result=await dbs.execute(select(models.User).where(models.User.id == id))
         user=result.scalars().first()
+        # If the user was deleted but the token is still valid, treat as unauthorized
+        if user is None:
+            raise credentials_exception
         return user
     # if the token itself is invalid we raise a JWTError
     except JWTError:
